@@ -1,4 +1,5 @@
-const { execSync, spawn } = require("child_process");
+const { spawn } = require("child_process");
+const ffmpegPath = require("ffmpeg-static");
 const fs   = require("fs");
 const path = require("path");
 
@@ -86,7 +87,7 @@ async function renderVideo({ clips, audioFile, captions, duration, outPath }) {
   ];
 
   return new Promise((resolve, reject) => {
-    const ff = spawn("ffmpeg", args);
+    const ff = spawn(ffmpegPath, args);
     let stderr = "";
     ff.stderr.on("data", d => { stderr += d.toString(); });
     ff.on("close", code => {

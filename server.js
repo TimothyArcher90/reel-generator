@@ -138,11 +138,10 @@ app.get("/test", async (req, res) => {
   results.higgsfield_key = process.env.HIGGSFIELD_API_KEY ? "presente (" + process.env.HIGGSFIELD_API_KEY.slice(0,8) + "...)" : "FALTA";
   results.voice_id = process.env.HIGGSFIELD_VOICE_ID || "FALTA";
 
-  // Test ffmpeg
+  // Test ffmpeg-static
   try {
-    const { execSync } = require("child_process");
-    execSync("ffmpeg -version", { timeout: 5000 });
-    results.ffmpeg = "OK";
+    const ffmpegPath = require("ffmpeg-static");
+    results.ffmpeg = ffmpegPath ? "OK — " + ffmpegPath : "ERROR: path vacío";
   } catch(e) { results.ffmpeg = "ERROR: " + e.message.slice(0,100); }
 
   res.json(results);
