@@ -4,7 +4,7 @@ const path    = require("path");
 const fs      = require("fs");
 
 const { generateScript }    = require("./pipeline/generateScript");
-const { generateVoiceover } = require("./pipeline/minimax");
+const { generateVoiceover } = require("./pipeline/replicate");
 const { generateAllClips }  = require("./pipeline/runway");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 const { renderVideo }       = require("./pipeline/renderVideo");
@@ -136,21 +136,16 @@ app.get("/test", async (req, res) => {
     results.anthropic = "OK — " + r.content[0].text;
   } catch(e) { results.anthropic = "ERROR: " + e.message; }
 
-  // Test MiniMax
+  // Test Replicate
   try {
     const axios = require("axios");
-    const mmKey = process.env.MINIMAX_API_KEY || "";
-    const groupId = process.env.MINIMAX_GROUP_ID || "";
-    results.minimax_key   = mmKey ? "presente (" + mmKey.slice(0,8) + "...)" : "FALTA";
-    results.minimax_voice = process.env.MINIMAX_VOICE_ID || "FALTA";
-    const mmUrl = `https://api.minimax.io/v1/t2a_v2${groupId ? `?GroupId=${groupId}` : ""}`;
-    const mmRes = await axios.post(mmUrl, {
-      model: "speech-02-hd", text: "test",
-      voice_setting: { voice_id: process.env.MINIMAX_VOICE_ID || "test", speed: 1, vol: 1, pitch: 0 },
-      audio_setting: { sample_rate: 32000, bitrate: 128000, format: "mp3" }
-    }, { headers: { Authorization: `Bearer ${mmKey}` }, timeout: 15000 });
-    results.minimax_api = mmRes.data.base_resp?.status_code === 0 ? "OK" : "ERROR: " + mmRes.data.base_resp?.status_msg;
-  } catch(e) { results.minimax_api = "ERROR " + (e.response?.status || e.code || e.message.slice(0,80)); }
+    const rpKey = process.env.REPLICATE_API_KEY || "";
+    results.replicate_key = rpKey ? "presente (" + rpKey.slice(0,8) + "...)" : "FALTA";
+    const rpRes = await axios.get("https://api.replicate.com/v1/account", {
+      headers: { Authorization: `Bearer ${rpKey}` }, timeout: 10000
+    });
+    results.replicate_api = "OK — " + (rpRes.data.username || rpRes.status);
+  } catch(e) { results.replicate_api = "ERROR " + (e.response?.status || e.code || e.message.slice(0,80)); }
 
   // Test Runway
   try {
