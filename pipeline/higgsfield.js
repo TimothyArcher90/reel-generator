@@ -52,14 +52,11 @@ async function generateAllClips(prompts, onProgress) {
 
 async function generateVoiceover(text) {
   const voiceId = process.env.HIGGSFIELD_VOICE_ID;
-  const { data } = await hf().post("/audio", {
-    model:         "minimax_speech_v2_hd",
-    prompt:        text,
-    voice_id:      voiceId,
-    voice_type:    "element",
-    speech_rate:   0,
-    pitch_rate:    0,
-    loudness_rate: 0
+  const { data } = await hf().post("/generation", {
+    model:      "seed_audio",
+    prompt:     text,
+    voice_id:   voiceId,
+    voice_type: "element"
   });
   const jobId = data.results?.[0]?.id ?? data.id;
   const job   = await waitForJob(jobId);
