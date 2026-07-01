@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Reel Generator — Macrowise</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0a0a0a;color:#e8e8e8;min-height:100vh;display:flex;align-items:center;justify-content:center}
+    .wrap{width:100%;max-width:620px;padding:40px 24px}
+    h1{font-size:26px;font-weight:300;letter-spacing:.1em;color:#f2c94c;text-transform:uppercase;margin-bottom:6px}
+    .sub{font-size:13px;color:#555;margin-bottom:40px}
+    .drop{border:2px dashed #2a2a2a;border-radius:14px;padding:56px 24px;text-align:center;cursor:pointer;transition:.2s}
+    .drop:hover,.drop.over{border-color:#f2c94c;background:rgba(242,201,76,.04)}
+    .drop .ic{font-size:40px;margin-bottom:12px}
+    .drop p{color:#666;font-size:14px}
+    #fi{display:none}
+    #fn{margin-top:12px;color:#f2c94c;font-size:13px;min-height:18px}
+    .btn{width:100%;padding:16px;margin-top:20px;background:#f2c94c;color:#0a0a0a;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:.2s}
+    .btn:disabled{opacity:.35;cursor:not-allowed}
+    #prog{display:none;margin-top:36px}
+    .bar{display:flex;gap:6px;margin-bottom:20px}
+    .s{flex:1;height:3px;background:#1e1e1e;border-radius:2px;transition:.4s}
+    .s.on{background:#f2c94c}.s.ok{background:#4caf50}
+    #msg{color:#aaa;font-size:13px;margin-bottom:4px}
+    #ela{color:#444;font-size:11px;margin-bottom:14px}
+    #lbx{background:#111;border-radius:10px;padding:16px;font-family:monospace;font-size:11px;color:#666;max-height:200px;overflow-y:auto;line-height:1.9}
+    #done{display:none;margin-top:36px;text-align:center}
+    #done h2{font-size:20px;color:#4caf50;margin-bottom:12px}
+    #done p{color:#666;font-size:13px;margin-bottom:20px}
+    .dl{display:inline-block;padding:14px 36px;background:#4caf50;color:#fff;border-radius:12px;font-size:15px;font-weight:700;text-decoration:none}
+    #err{display:none;margin-top:20px;background:#150808;border-radius:10px;padding:16px;color:#f55;font-size:13px}
+    #ext{margin-top:10px;color:#555;font-size:12px;min-height:14px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Reel Generator</h1>
+  <p class="sub">PDF → Voz de Guillermo → Video → MP4 listo para publicar</p>
+
+  <div class="drop" id="dz" onclick="document.getElementById('fi').click()">
+    <div class="ic">📄</div>
+    <p><strong style="color:#e8e8e8">Arrastra tu PDF aquí</strong></p>
+    <p style="margin-top:6px">o haz clic para seleccionar</p>
+    <div id="ext"></div>
+    <div id="fn"></div>
+  </div>
+  <input type="file" id="fi" accept=".pdf"/>
+  <button class="btn" id="btn" disabled onclick="go()">Generar Reel</button>
+
+  <div id="prog">
+    <div class="bar">
+      <div class="s" id="s1"></div>
+      <div class="s" id="s2"></div>
+      <div class="s" id="s3"></div>
+      <div class="s" id="s4"></div>
+    </div>
+    <div id="msg">Iniciando...</div>
+    <div id="ela"></div>
+    <div id="lbx"></div>
+  </div>
+
+  <div id="done">
+    <h2>✓ Video listo</h2>
+    <p id="dtitle"></p>
+    <a href="#" id="dl" class="dl">Descargar MP4</a>
+  </div>
+  <div id="err"></div>
+</div>
+
+<script>
+const pdfjsLib = window['pdfjs-dist/build/pdf'];
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let file = null, poll = null, t0 = null, lastN = 0;
+
+// drag & drop
+const dz = document.getElementById('dz');
+dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('over')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');pick(e.dataTransfer.files[0])});
+document.getElementById('fi').addEventListener('change',e=>pick(e.target.files[0]));
+
+function pick(f){
+  if(!f||!f.name.endsWith('.pdf')) return alert('Solo archivos PDF');
+  file=f;
+  document.getElementById('fn').textContent=f.name;
+  document.getElementById('ext').textContent='Extrayendo texto...';
+  document.getElementById('btn').disabled=true;
+  extractText(f).then(n=>{
+    document.getElementById('ext').textContent=`${n.toLocaleString()} caracteres extraídos`;
+    document.getElementById('btn').disabled=false;
+  }).catch(e=>{
+    document.getElementById('ext').textContent='Error al leer PDF: '+e.message;
+  });
+}
+
+async function extractText(f){
+  const buf  = await f.arrayBuffer();
+  const pdf  = await pdfjsLib.getDocument({data:buf}).promise;
+  let txt='';
+  for(let i=1;i<=pdf.numPages;i++){
+    const pg = await pdf.getPage(i);
+    const ct = await pg.getTextContent();
+    txt += ct.items.map(x=>x.str).join(' ')+'\n\n';
+  }
+  file._text=txt.trim();
+  return file._text.length;
+}
+
+function lg(m){
+  const b=document.getElementById('lbx');
+  b.innerHTML+='<div>→ '+m+'</div>';
+  b.scrollTop=b.scrollHeight;
+}
+
+function step(n){
+  for(let i=1;i<=4;i++){
+    document.getElementById('s'+i).className='s'+(i<n?' ok':i===n?' on':'');
+  }
+}
+
+function fail(m){
+  clearInterval(poll);
+  document.getElementById('err').style.display='block';
+  document.getElementById('err').textContent='Error: '+m;
+  document.getElementById('btn').disabled=false;
+}
+
+async function go(){
+  if(!file||!file._text) return alert('Espera a que termine la extracción del PDF');
+  document.getElementById('btn').disabled=true;
+  document.getElementById('prog').style.display='block';
+  document.getElementById('done').style.display='none';
+  document.getElementById('err').style.display='none';
+  document.getElementById('lbx').innerHTML='';
+  lastN=0; t0=Date.now();
+
+  let jobId;
+  try{
+    const r=await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:file._text,filename:file.name})});
+    const d=await r.json();
+    if(d.error) return fail(d.error);
+    jobId=d.jobId;
+  }catch(e){return fail('No se pudo conectar: '+e.message)}
+
+  lg('Job iniciado');
+
+  poll=setInterval(async()=>{
+    try{
+      const r=await fetch('/status/'+jobId);
+      const j=await r.json();
+      const s=Math.round((Date.now()-t0)/1000);
+      document.getElementById('ela').textContent=s+'s transcurridos';
+      if(j.step) step(j.step);
+      if(j.statusMsg) document.getElementById('msg').textContent=j.statusMsg;
+      (j.logs||[]).slice(lastN).forEach(lg);
+      lastN=(j.logs||[]).length;
+      if(j.status==='done'){
+        clearInterval(poll);
+        step(5);
+        document.getElementById('msg').textContent='¡Listo!';
+        document.getElementById('dtitle').textContent='"'+j.title+'" — '+Math.round((Date.now()-t0)/1000)+'s';
+        document.getElementById('dl').href=j.downloadUrl;
+        document.getElementById('dl').download=(j.title||'reel').replace(/\s+/g,'-')+'.mp4';
+        document.getElementById('done').style.display='block';
+      }
+      if(j.status==='error') fail(j.error||'Error desconocido');
+    }catch(e){lg('(reintentando...)')}
+  },3000);
+}
+</script>
+</body>
+</html>

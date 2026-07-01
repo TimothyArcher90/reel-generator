@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="{{LANG}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #000; }
+
+      .video-bg {
+        position: absolute; top: 0; left: 0;
+        width: 1080px; height: 1920px;
+        object-fit: cover; opacity: 0; z-index: 1;
+      }
+
+      /*
+        Safe zone TikTok/Instagram (1080×1920):
+          Top UI:    ~270px   Bottom UI: ~380px   Right UI: ~130px
+          Content center = (270+1540)/2 = 905px from top
+      */
+      #scrim {
+        position: absolute; top: 0; left: 0;
+        width: 1080px; height: 1920px;
+        background: rgba(0,0,0,0.32); z-index: 4; pointer-events: none;
+      }
+      .caption {
+        position: absolute; top: 905px;
+        left: 80px; right: 140px;
+        transform: translateY(-50%);
+        z-index: 10; opacity: 0; text-align: center;
+      }
+      .caption-inner {
+        display: inline-block; width: 100%;
+        background: rgba(0,0,0,0.52);
+        border-radius: 24px; padding: 40px 48px;
+        backdrop-filter: blur(4px);
+      }
+      .caption p {
+        font-family: 'Cormorant Garamond', Georgia, serif;
+        font-size: 68px; font-weight: 400; color: #ffffff;
+        line-height: 1.25; letter-spacing: 0.01em;
+      }
+      .caption p em { font-style: italic; color: #f2c94c; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="{{DURATION}}"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- VIDEO CLIPS — alternating tracks 1/2 for cross-dissolve -->
+      {{VIDEO_CLIPS}}
+
+      <!-- SCRIM -->
+      <div id="scrim"></div>
+
+      <!-- CAPTIONS — track 3 -->
+      {{CAPTIONS}}
+
+      <!-- VOICEOVER — track 0 -->
+      <audio id="vo" class="clip"
+             data-start="0" data-duration="{{DURATION}}" data-track-index="0"
+             src="media/{{AUDIO_FILE}}" preload="auto"></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      gsap.defaults({ overwrite: "auto" });
+      const tl = gsap.timeline({ paused: true });
+      const D = 0.5;
+
+      // VIDEO DISSOLVES
+      {{VIDEO_GSAP}}
+
+      // CAPTION ANIMATIONS
+      {{CAPTION_GSAP}}
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
