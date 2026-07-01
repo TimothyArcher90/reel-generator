@@ -3,9 +3,11 @@ const express = require("express");
 const path    = require("path");
 const fs      = require("fs");
 
-const { generateScript }  = require("./pipeline/generateScript");
-const { generateAllClips, generateVoiceover, downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
-const { renderVideo }     = require("./pipeline/renderVideo");
+const { generateScript }    = require("./pipeline/generateScript");
+const { generateVoiceover } = require("./pipeline/minimax");
+const { generateAllClips }  = require("./pipeline/runway");
+const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
+const { renderVideo }       = require("./pipeline/renderVideo");
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -134,21 +136,33 @@ app.get("/test", async (req, res) => {
     results.anthropic = "OK — " + r.content[0].text;
   } catch(e) { results.anthropic = "ERROR: " + e.message; }
 
-  // Test Higgsfield REST API live
+  // Test MiniMax
   try {
     const axios = require("axios");
-    const hfKey = process.env.HIGGSFIELD_API_KEY || "";
-    results.higgsfield_key = hfKey ? "presente (" + hfKey.slice(0,8) + "...)" : "FALTA";
-    const hfRes = await axios.get("https://api.higgsfield.ai/v1/generation", {
-      headers: { Authorization: `Bearer ${hfKey}` },
-      timeout: 10000,
-      params: { limit: 1 }
+    const mmKey = process.env.MINIMAX_API_KEY || "";
+    const groupId = process.env.MINIMAX_GROUP_ID || "";
+    results.minimax_key   = mmKey ? "presente (" + mmKey.slice(0,8) + "...)" : "FALTA";
+    results.minimax_voice = process.env.MINIMAX_VOICE_ID || "FALTA";
+    const mmUrl = `https://api.minimax.io/v1/t2a_v2${groupId ? `?GroupId=${groupId}` : ""}`;
+    const mmRes = await axios.post(mmUrl, {
+      model: "speech-02-hd", text: "test",
+      voice_setting: { voice_id: process.env.MINIMAX_VOICE_ID || "test", speed: 1, vol: 1, pitch: 0 },
+      audio_setting: { sample_rate: 32000, bitrate: 128000, format: "mp3" }
+    }, { headers: { Authorization: `Bearer ${mmKey}` }, timeout: 15000 });
+    results.minimax_api = mmRes.data.base_resp?.status_code === 0 ? "OK" : "ERROR: " + mmRes.data.base_resp?.status_msg;
+  } catch(e) { results.minimax_api = "ERROR " + (e.response?.status || e.code || e.message.slice(0,80)); }
+
+  // Test Runway
+  try {
+    const axios = require("axios");
+    const rwKey = process.env.RUNWAY_API_KEY || "";
+    results.runway_key = rwKey ? "presente (" + rwKey.slice(0,8) + "...)" : "FALTA";
+    const rwRes = await axios.get("https://api.runwayml.com/v1/tasks", {
+      headers: { Authorization: `Bearer ${rwKey}`, "X-Runway-Version": "2024-11-06" },
+      timeout: 10000, params: { limit: 1 }
     });
-    results.higgsfield_api = "OK — status " + hfRes.status;
-  } catch(e) {
-    results.higgsfield_api = "ERROR " + (e.response?.status || e.code || e.message.slice(0,80));
-  }
-  results.voice_id = process.env.HIGGSFIELD_VOICE_ID || "FALTA";
+    results.runway_api = "OK — status " + rwRes.status;
+  } catch(e) { results.runway_api = "ERROR " + (e.response?.status || e.code || e.message.slice(0,80)); }
 
   // Test ffmpeg-static
   try {
