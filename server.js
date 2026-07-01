@@ -120,4 +120,32 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
+// ── GET /test ── diagnóstico rápido ─────────────────────────────────────────
+app.get("/test", async (req, res) => {
+  const results = {};
+  // Test Anthropic
+  try {
+    const Anthropic = require("@anthropic-ai/sdk");
+    const c = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 15000 });
+    const r = await c.messages.create({
+      model: "claude-haiku-4-5-20251001", max_tokens: 10,
+      messages: [{ role: "user", content: "Di: OK" }]
+    });
+    results.anthropic = "OK — " + r.content[0].text;
+  } catch(e) { results.anthropic = "ERROR: " + e.message; }
+
+  // Test Higgsfield key present
+  results.higgsfield_key = process.env.HIGGSFIELD_API_KEY ? "presente (" + process.env.HIGGSFIELD_API_KEY.slice(0,8) + "...)" : "FALTA";
+  results.voice_id = process.env.HIGGSFIELD_VOICE_ID || "FALTA";
+
+  // Test ffmpeg
+  try {
+    const { execSync } = require("child_process");
+    execSync("ffmpeg -version", { timeout: 5000 });
+    results.ffmpeg = "OK";
+  } catch(e) { results.ffmpeg = "ERROR: " + e.message.slice(0,100); }
+
+  res.json(results);
+});
+
 app.listen(PORT, () => console.log(`Reel Generator → http://localhost:${PORT}`));
