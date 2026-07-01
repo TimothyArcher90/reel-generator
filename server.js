@@ -134,8 +134,20 @@ app.get("/test", async (req, res) => {
     results.anthropic = "OK — " + r.content[0].text;
   } catch(e) { results.anthropic = "ERROR: " + e.message; }
 
-  // Test Higgsfield key present
-  results.higgsfield_key = process.env.HIGGSFIELD_API_KEY ? "presente (" + process.env.HIGGSFIELD_API_KEY.slice(0,8) + "...)" : "FALTA";
+  // Test Higgsfield REST API live
+  try {
+    const axios = require("axios");
+    const hfKey = process.env.HIGGSFIELD_API_KEY || "";
+    results.higgsfield_key = hfKey ? "presente (" + hfKey.slice(0,8) + "...)" : "FALTA";
+    const hfRes = await axios.get("https://api.higgsfield.ai/v1/generation", {
+      headers: { Authorization: `Bearer ${hfKey}` },
+      timeout: 10000,
+      params: { limit: 1 }
+    });
+    results.higgsfield_api = "OK — status " + hfRes.status;
+  } catch(e) {
+    results.higgsfield_api = "ERROR " + (e.response?.status || e.code || e.message.slice(0,80));
+  }
   results.voice_id = process.env.HIGGSFIELD_VOICE_ID || "FALTA";
 
   // Test ffmpeg-static
