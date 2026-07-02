@@ -1,24 +1,20 @@
 const axios = require("axios");
 
-// Voz de Guillermo clonada en MiniMax (via Replicate) — calidad Speech-02 HD,
-// el mismo motor que usa Higgsfield. Clon one-time ya hecho.
-const GUILLERMO_VOICE_ID = process.env.GUILLERMO_VOICE_ID || "R8_5WN1DFXN";
+// Voz de Guillermo clonada — modelo de comunidad XTTS-v2 (no requiere tarjeta extra)
+const VOICE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/guillermo-voice.wav`
+  : "https://reel-generator-production-5a8d.up.railway.app/guillermo-voice.wav";
 
 async function generateVoiceover(text) {
   const apiKey = process.env.REPLICATE_API_KEY;
 
   const { data: pred } = await axios.post(
-    "https://api.replicate.com/v1/models/minimax/speech-02-hd/predictions",
+    "https://api.replicate.com/v1/models/lucataco/xtts-v2/predictions",
     {
       input: {
-        text,
-        voice_id:       GUILLERMO_VOICE_ID,
-        speed:          1,
-        volume:         1,
-        pitch:          0,
-        emotion:        "neutral",
-        language_boost: "Spanish",
-        english_normalization: false
+        text:        text.slice(0, 2000),
+        speaker_wav: VOICE_URL,
+        language:    "es"
       }
     },
     {

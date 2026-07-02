@@ -1,10 +1,8 @@
 const axios = require("axios");
 
-// Video AI de alta calidad via Replicate.
-// Principal: bytedance/seedance-1-lite (el mismo motor que usa Higgsfield)
-// Fallback:  wan-video/wan-2.2-t2v-fast
-const PRIMARY  = "bytedance/seedance-1-lite";
-const FALLBACK = "wan-video/wan-2.2-t2v-fast";
+// Video AI de alta calidad via Replicate — modelos de comunidad (no requieren tarjeta extra)
+const PRIMARY  = "fofr/ltx-video";
+const FALLBACK = "fofr/ltx-video";
 
 async function createPrediction(model, input, apiKey) {
   const { data } = await axios.post(
@@ -39,24 +37,12 @@ async function waitForPrediction(predId, apiKey, timeoutMs = 600000) {
 async function generateClip(prompt) {
   const apiKey = process.env.REPLICATE_API_KEY;
 
-  // Seedance: 5s, 720p, 9:16
-  try {
-    const id = await createPrediction(PRIMARY, {
-      prompt,
-      duration:     5,
-      resolution:   "720p",
-      aspect_ratio: "9:16",
-      fps:          24
-    }, apiKey);
-    return await waitForPrediction(id, apiKey);
-  } catch (e) {
-    console.log("Seedance falló (" + e.message.slice(0, 120) + ") — fallback a WAN 2.2...");
-  }
-
-  // Fallback WAN 2.2 fast
-  const id = await createPrediction(FALLBACK, {
+  const id = await createPrediction(PRIMARY, {
     prompt,
-    aspect_ratio: "9:16"
+    aspect_ratio: "9:16",
+    length:       97,   // ~4s a 24fps
+    target_size:  640,
+    steps:        30
   }, apiKey);
   return await waitForPrediction(id, apiKey);
 }
@@ -81,7 +67,7 @@ async function generateClipWithRetry(prompt, maxRetries = 3) {
 async function generateAllClips(prompts, onProgress) {
   const urls = [];
   for (let i = 0; i < prompts.length; i++) {
-    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (Seedance)...`);
+    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (LTX-Video)...`);
     urls.push(await generateClipWithRetry(prompts[i]));
     if (i < prompts.length - 1) await sleep(2000);
   }

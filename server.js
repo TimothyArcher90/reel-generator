@@ -227,8 +227,12 @@ app.get("/test", async (req, res) => {
     const r = await axios.get("https://api.replicate.com/v1/models/fofr/ltx-video", {
       headers: { Authorization: `Bearer ${rpKey}` }, timeout: 10000
     });
-    const props = r.data.latest_version?.openapi_schema?.components?.schemas?.Input?.properties;
+    const schemas = r.data.latest_version?.openapi_schema?.components?.schemas;
+    const props = schemas?.Input?.properties;
     results.ltx_schema = props ? Object.keys(props).map(k => k + ":" + (props[k].type||props[k].allOf?.[0]?.$ref||"?")).join(", ") : "sin schema";
+    results.ltx_length_enum = schemas?.length?.enum;
+    results.ltx_aspect_enum = schemas?.aspect_ratio?.enum;
+    results.ltx_target_size_enum = schemas?.target_size?.enum;
   } catch(e) { results.ltx_schema = "ERROR: " + e.message.slice(0,100); }
 
   res.json(results);
