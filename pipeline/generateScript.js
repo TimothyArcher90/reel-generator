@@ -24,28 +24,34 @@ REGLAS DEL GUION (español):
 - Último segmento: cierre que RESUELVE la tensión planteada en el hook, con un giro final que deja pensando — no lo dejes abierto ni cortado, debe sentirse como una conclusión intencional, editado como cierre profesional, nunca como un corte abrupto a mitad de idea
 - Usa **negritas** para 1-3 palabras clave por segmento
 
-REGLAS DE LOS VIDEO PROMPTS (inglés — van a un modelo text-to-video de alta gama):
-- USA UN VOCABULARIO VISUAL CONCRETO Y UNIVERSAL, no inventes metáforas abstractas nuevas por segmento (los modelos de video no las interpretan bien y el resultado sale sin relación con el guion). Para cada segmento, elige el ítem de esta lista que mejor represente su concepto y constrúyele un shot cinematográfico alrededor:
-  * Crecimiento / escala / expansión → cordillera montañosa vista desde el aire, o una ciudad extendiéndose hasta el horizonte
-  * Conexión / redes / relaciones → red de nodos y líneas de luz sólidas conectando una ciudad de noche (vista aérea real, no holograma)
-  * Riesgo / caída / colapso → cascada de agua o rocas cayendo con fuerza, o un edificio/estructura desde un ángulo vertiginoso
-  * Poder / control / concentración → rascacielos financiero monumental visto desde abajo, o una bóveda/cámara acorazada de metal macizo
-  * Datos / tecnología / IA → servidores/data center con luces intensas, o placas de circuitos vistas de cerca pero con forma clara y sólida
-  * Tiempo / ciclos / historia → reloj mecánico de engranajes grandes, o el amanecer/atardecer sobre una ciudad
-  * Océano / flujo / liquidez → olas del mar reales (agua, no metal líquido abstracto), vistas desde un dron
-  * Origen / fundamentos / biología → hélice de ADN como escultura sólida, o raíces de un árbol gigante
-  * Cosmos / incertidumbre / escala infinita → planeta visto desde el espacio, o campo de estrellas con nebulosa
-  * Precisión / ingeniería / maquinaria → maquinaria industrial en movimiento, piezas metálicas engranando con precisión
-- Cada prompt debe LIGAR el ítem elegido al concepto EXACTO de su segmento (no repitas el mismo ítem en dos segmentos)
-- Cada prompt: 40-70 palabras con esta estructura exacta:
-  [SHOT TYPE] + [SUBJECT del vocabulario visual, sólido y con presencia física real — nada de hologramas, partículas o niebla] + [MOVEMENT de cámara] + [LIGHTING dramático de alto contraste] + [MOOD/GRADE poderoso]
-- Cada prompt DEBE ser visualmente distinto al anterior (variar shot type: medium shot, aerial, dolly-in, orbit, slow push)
+REGLAS DE LOS VIDEO PROMPTS (inglés — van a un modelo text-to-video, PRIORIDAD MÁXIMA: CERO AMBIGÜEDAD):
+El modelo de video interpreta literalmente cada palabra. Si una palabra admite dos lecturas visuales, el modelo elige la que NO queremos. Por eso cada prompt debe describir UNA sola imagen posible, sin espacio para interpretación.
+
+Para cada segmento, elige EXACTAMENTE UNO de estos sujetos (no combines, no ofrezcas alternativas con "or"; comprométete a uno solo):
+  * Crecimiento / escala / expansión → una cordillera montañosa nevada vista desde un dron, extendiéndose hasta el horizonte
+  * Conexión / redes / relaciones → una red de cables de fibra óptica reales con luz ámbar viajando por su interior, tendidos entre edificios de una ciudad de noche
+  * Riesgo / caída / colapso → una cascada de agua real cayendo con fuerza sobre rocas oscuras
+  * Poder / control / concentración → un rascacielos financiero de vidrio y acero fotografiado desde la base mirando hacia arriba
+  * Datos / tecnología / IA → un pasillo de racks de servidores con luces LED ámbar parpadeando en la oscuridad
+  * Tiempo / ciclos / historia → un reloj mecánico de bronce con engranajes grandes girando, visto de cerca
+  * Océano / flujo / liquidez → olas de mar reales rompiendo contra rocas, filmadas desde un dron bajo
+  * Origen / fundamentos / biología → una doble hélice de ADN esculpida en metal sólido, iluminada desde un lado
+  * Cosmos / incertidumbre / escala infinita → un planeta rocoso visto desde una nave, con estrellas de fondo
+  * Precisión / ingeniería / maquinaria → brazos robóticos industriales de metal ensamblando piezas con precisión
+- Estructura OBLIGATORIA de cada prompt, en este orden exacto y sin desviarte:
+  1. Tipo de plano exacto (elige UNO): "Extreme close-up shot", "Close-up shot", "Medium shot", "Wide shot", "Aerial drone shot", "Low-angle shot"
+  2. El sujeto elegido de la lista de arriba, con máximo 2 adjetivos de material/color (ej. "dark brushed steel", "amber-lit")
+  3. UN solo verbo de movimiento de cámara (elige UNO): "orbits slowly around", "pushes in toward", "pulls back from", "glides forward over", "tilts up along"
+  4. Una sola fuente de luz descrita literalmente (ej. "lit by a single strong light source from the left, casting hard shadows")
+  5. Cierra siempre con esta frase exacta, sin modificarla: "cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people"
+- PROHIBIDO usar palabras abstractas o metafóricas que no describan un objeto físico real: nada de "energy", "flow" (como sustantivo suelto), "power" (como sustantivo suelto), "essence", "spirit", "concept". Si necesitas expresar una idea abstracta, tradúcela SIEMPRE al objeto físico concreto de la lista de arriba.
+- No repitas el mismo sujeto en dos segmentos distintos
+- Cada prompt DEBE usar un tipo de plano y un movimiento de cámara distintos al del prompt anterior
 - El prompt 1 (opening) debe ser el más espectacular e imponente: es lo que detiene el scroll
-- El ÚLTIMO prompt debe ser un plano de RESOLUCIÓN/CIERRE VISUAL: convergencia, revelación, o un movimiento de cámara (ej. pull-back, reveal) que transmita conclusión con fuerza — coordinado con el cierre narrativo del último segmento
-- Termina cada prompt con: "cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade"
+- El ÚLTIMO prompt debe usar "pulls back from" o "tilts up along" para transmitir conclusión/revelación, coordinado con el cierre narrativo del último segmento
 
 EJEMPLO de prompt correcto (para un segmento sobre "el capital rota hacia nuevos sectores"):
-"Aerial tracking shot of a vast night city skyline with glowing amber light trails flowing continuously between skyscrapers along real streets and rail lines, camera slowly gliding forward to reveal the light network constantly rerouting toward new districts rather than fading, strong directional lighting casting deep shadows between buildings, cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade"
+"Aerial drone shot of a dense fiber optic cable network with amber light traveling through the cables, strung between skyscrapers in a night city, camera glides forward over the network as the light constantly reroutes toward new buildings, lit by the amber glow from within the cables casting hard shadows on the buildings below, cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people"
 
 RESPONDE SOLO con este JSON (sin markdown):
 {
