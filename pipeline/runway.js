@@ -1,44 +1,93 @@
 const axios = require("axios");
 
-async function searchPexels(query) {
-  const key = process.env.PEXELS_API_KEY;
-  const { data } = await axios.get("https://api.pexels.com/videos/search", {
-    headers: { Authorization: key },
-    params: { query, orientation: "portrait", per_page: 3, size: "medium" },
-    timeout: 10000
-  });
-  const videos = data.videos?.length ? data.videos : await fallback(key);
-  return bestFile(videos[0]);
+// Video AI de alta calidad via Replicate.
+// Principal: bytedance/seedance-1-lite (el mismo motor que usa Higgsfield)
+// Fallback:  wan-video/wan-2.2-t2v-fast
+const PRIMARY  = "bytedance/seedance-1-lite";
+const FALLBACK = "wan-video/wan-2.2-t2v-fast";
+
+async function createPrediction(model, input, apiKey) {
+  const { data } = await axios.post(
+    `https://api.replicate.com/v1/models/${model}/predictions`,
+    { input },
+    { headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, timeout: 30000 }
+  );
+  if (!data.id) throw new Error(model + ": no prediction id — " + JSON.stringify(data).slice(0, 200));
+  return data.id;
 }
 
-async function fallback(key) {
-  const { data } = await axios.get("https://api.pexels.com/videos/search", {
-    headers: { Authorization: key },
-    params: { query: "business professional", orientation: "portrait", per_page: 3 },
-    timeout: 10000
-  });
-  return data.videos || [];
+async function waitForPrediction(predId, apiKey, timeoutMs = 600000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await sleep(6000);
+    const { data } = await axios.get(
+      `https://api.replicate.com/v1/predictions/${predId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` }, timeout: 15000 }
+    );
+    if (data.status === "succeeded") {
+      const url = Array.isArray(data.output) ? data.output[0] : data.output;
+      if (!url) throw new Error("succeeded pero sin output");
+      return url;
+    }
+    if (data.status === "failed" || data.status === "canceled") {
+      throw new Error("falló: " + (data.error || data.status));
+    }
+  }
+  throw new Error("timeout");
 }
 
-function bestFile(video) {
-  const files = (video.video_files || []).filter(f => f.width < f.height);
-  const sorted = (files.length ? files : video.video_files || []).sort((a, b) => b.width - a.width);
-  return sorted[0]?.link || sorted[0]?.url;
+async function generateClip(prompt) {
+  const apiKey = process.env.REPLICATE_API_KEY;
+
+  // Seedance: 5s, 720p, 9:16
+  try {
+    const id = await createPrediction(PRIMARY, {
+      prompt,
+      duration:     5,
+      resolution:   "720p",
+      aspect_ratio: "9:16",
+      fps:          24
+    }, apiKey);
+    return await waitForPrediction(id, apiKey);
+  } catch (e) {
+    console.log("Seedance falló (" + e.message.slice(0, 120) + ") — fallback a WAN 2.2...");
+  }
+
+  // Fallback WAN 2.2 fast
+  const id = await createPrediction(FALLBACK, {
+    prompt,
+    aspect_ratio: "9:16"
+  }, apiKey);
+  return await waitForPrediction(id, apiKey);
 }
 
-function keywords(prompt) {
-  const stop = new Set(["a","an","the","with","and","of","in","on","at","for","to","is","are","shot","cinematic","dramatic","close","wide","aerial","slow","motion"]);
-  return prompt.toLowerCase().replace(/[^a-z0-9 ]/g," ").split(" ")
-    .filter(w => w.length > 3 && !stop.has(w)).slice(0,3).join(" ") || "business";
+async function generateClipWithRetry(prompt, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await generateClip(prompt);
+    } catch (e) {
+      const is429 = e.response?.status === 429 || (e.message && e.message.includes("429"));
+      if (is429 && attempt < maxRetries) {
+        await sleep(attempt * 15000);
+      } else if (attempt < maxRetries) {
+        await sleep(5000);
+      } else {
+        throw e;
+      }
+    }
+  }
 }
 
 async function generateAllClips(prompts, onProgress) {
   const urls = [];
   for (let i = 0; i < prompts.length; i++) {
-    onProgress(`Buscando clip ${i + 1} de ${prompts.length}...`);
-    urls.push(await searchPexels(keywords(prompts[i])));
+    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (Seedance)...`);
+    urls.push(await generateClipWithRetry(prompts[i]));
+    if (i < prompts.length - 1) await sleep(2000);
   }
   return urls;
 }
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 module.exports = { generateAllClips };
