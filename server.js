@@ -4,7 +4,7 @@ const path    = require("path");
 const fs      = require("fs");
 
 const { generateScript }    = require("./pipeline/generateScript");
-const { generateVoiceover } = require("./pipeline/replicate");
+const { generateVoiceover } = require("./pipeline/edgetts");
 const { generateAllClips }  = require("./pipeline/runway");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 const { renderVideo }       = require("./pipeline/renderVideo");
@@ -71,12 +71,11 @@ async function runPipeline(jobId, text, baseFilename) {
   const N = script.captions.length;
   log(jobId, `Guion listo: "${script.title}" — ${N} segmentos`);
 
-  // Step 2 — Voiceover
-  upd(jobId, { step: 2, statusMsg: "Generando voz de Guillermo..." });
+  // Step 2 — Voiceover (Edge-TTS escribe directo al archivo)
+  upd(jobId, { step: 2, statusMsg: "Generando voz..." });
   log(jobId, "[2/4] Generando voz...");
-  const audioUrl  = await withTimeout(generateVoiceover(script.voiceover), 180000, "Voiceover timeout");
   const audioFile = path.join(workDir, "audio.mp3");
-  await downloadFile(audioUrl, audioFile);
+  await withTimeout(generateVoiceover(script.voiceover, audioFile), 120000, "Voiceover timeout");
   const duration = await getAudioDuration(audioFile);
   log(jobId, `Voz lista — ${duration}s`);
 
