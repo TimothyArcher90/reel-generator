@@ -187,54 +187,6 @@ app.get("/test", async (req, res) => {
     }
   } catch(e) { results.pexels_api = "ERROR: " + (e.response?.status || e.message.slice(0,80)); }
 
-  // Test modelo COMUNIDAD en Replicate (barato, ~$0.001) — diagnóstico de spend limit
-  try {
-    const axios = require("axios");
-    const rpKey = process.env.REPLICATE_API_KEY || "";
-    const r = await axios.post(
-      "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
-      { input: { prompt: "test", num_outputs: 1 } },
-      { headers: { Authorization: `Bearer ${rpKey}`, "Content-Type": "application/json" }, timeout: 15000 }
-    );
-    results.replicate_community_model = "OK — id: " + r.data.id + " status: " + r.data.status;
-  } catch(e) {
-    results.replicate_community_model = "ERROR " + (e.response?.status) + " — " + JSON.stringify(e.response?.data)?.slice(0,200);
-  }
-
-  // Test candidatos de modelos COMUNIDAD para voz clonada y video (no oficiales, evitan bloqueo de tarjeta)
-  const rpKey = process.env.REPLICATE_API_KEY || "";
-  const candidates = {
-    voice_xtts: "lucataco/xtts-v2",
-    video_wan_zsxkib: "zsxkib/wan2.1",
-    video_wan_fofr: "fofr/wan2.1-with-vace",
-    video_ltx: "fofr/ltx-video"
-  };
-  for (const [key, model] of Object.entries(candidates)) {
-    try {
-      const axios = require("axios");
-      const r = await axios.get(`https://api.replicate.com/v1/models/${model}`, {
-        headers: { Authorization: `Bearer ${rpKey}` }, timeout: 10000
-      });
-      results[key] = r.data.latest_version ? "EXISTS — " + model : "sin version";
-    } catch(e) {
-      results[key] = "ERROR " + (e.response?.status || e.message.slice(0,60)) + " — " + model;
-    }
-  }
-
-  // Schema exacto de LTX-video para saber los input params correctos
-  try {
-    const axios = require("axios");
-    const r = await axios.get("https://api.replicate.com/v1/models/fofr/ltx-video", {
-      headers: { Authorization: `Bearer ${rpKey}` }, timeout: 10000
-    });
-    const schemas = r.data.latest_version?.openapi_schema?.components?.schemas;
-    const props = schemas?.Input?.properties;
-    results.ltx_schema = props ? Object.keys(props).map(k => k + ":" + (props[k].type||props[k].allOf?.[0]?.$ref||"?")).join(", ") : "sin schema";
-    results.ltx_length_enum = schemas?.length?.enum;
-    results.ltx_aspect_enum = schemas?.aspect_ratio?.enum;
-    results.ltx_target_size_enum = schemas?.target_size?.enum;
-  } catch(e) { results.ltx_schema = "ERROR: " + e.message.slice(0,100); }
-
   res.json(results);
 });
 

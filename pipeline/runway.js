@@ -1,8 +1,7 @@
 const axios = require("axios");
 
-// Video AI de alta calidad via Replicate — modelos de comunidad (no requieren tarjeta extra)
-const PRIMARY  = "fofr/ltx-video";
-const FALLBACK = "fofr/ltx-video";
+// Video AI de alta calidad via Replicate — modelo de comunidad (no requiere tarjeta extra)
+const PRIMARY = "fofr/ltx-video";
 
 async function createPrediction(model, input, apiKey) {
   const { data } = await axios.post(
