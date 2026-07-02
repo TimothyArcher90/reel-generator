@@ -72,10 +72,10 @@ async function runPipeline(jobId, text, baseFilename) {
   const N = script.captions.length;
   log(jobId, `Guion listo: "${script.title}" — ${N} segmentos`);
 
-  // Step 2 — Voiceover (Replicate XTTS-v2 con voz de Guillermo)
+  // Step 2 — Voz de Guillermo (MiniMax Speech-02 HD, voice_id clonado)
   upd(jobId, { step: 2, statusMsg: "Generando voz de Guillermo..." });
   log(jobId, "[2/4] Generando voz...");
-  const audioFile = path.join(workDir, "audio.wav");
+  const audioFile = path.join(workDir, "audio.mp3");
   const audioUrl = await withTimeout(generateVoiceover(script.voiceover), 180000, "Voiceover timeout");
   await downloadFile(audioUrl, audioFile);
   const duration = await getAudioDuration(audioFile);
@@ -83,10 +83,10 @@ async function runPipeline(jobId, text, baseFilename) {
 
   // Step 3 — Video clips
   upd(jobId, { step: 3, statusMsg: `Generando ${N} clips de video...` });
-  log(jobId, `[3/4] Buscando ${N} clips en Pexels...`);
+  log(jobId, `[3/4] Generando ${N} clips AI (Seedance)...`);
   const clipUrls = await withTimeout(
     generateAllClips(script.videoPrompts, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
-    700000, "Video clips timeout"
+    1500000, "Video clips timeout"
   );
   const clipFiles = [];
   for (let i = 0; i < clipUrls.length; i++) {
