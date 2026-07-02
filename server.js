@@ -187,6 +187,20 @@ app.get("/test", async (req, res) => {
     }
   } catch(e) { results.pexels_api = "ERROR: " + (e.response?.status || e.message.slice(0,80)); }
 
+  // Test modelo COMUNIDAD en Replicate (barato, ~$0.001) — diagnóstico de spend limit
+  try {
+    const axios = require("axios");
+    const rpKey = process.env.REPLICATE_API_KEY || "";
+    const r = await axios.post(
+      "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
+      { input: { prompt: "test", num_outputs: 1 } },
+      { headers: { Authorization: `Bearer ${rpKey}`, "Content-Type": "application/json" }, timeout: 15000 }
+    );
+    results.replicate_community_model = "OK — id: " + r.data.id + " status: " + r.data.status;
+  } catch(e) {
+    results.replicate_community_model = "ERROR " + (e.response?.status) + " — " + JSON.stringify(e.response?.data)?.slice(0,200);
+  }
+
   res.json(results);
 });
 
