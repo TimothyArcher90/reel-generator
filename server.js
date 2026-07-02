@@ -187,18 +187,6 @@ app.get("/test", async (req, res) => {
     }
   } catch(e) { results.pexels_api = "ERROR: " + (e.response?.status || e.message.slice(0,80)); }
 
-  // Debug Chatterbox: version hash y schema
-  try {
-    const axios = require("axios");
-    const rpKey = process.env.REPLICATE_API_KEY || "";
-    const r = await axios.get("https://api.replicate.com/v1/models/resemble-ai/chatterbox", {
-      headers: { Authorization: `Bearer ${rpKey}` }, timeout: 10000
-    });
-    results.chatterbox_version = r.data.latest_version?.id;
-    const props = r.data.latest_version?.openapi_schema?.components?.schemas?.Input?.properties;
-    results.chatterbox_inputs = props ? Object.keys(props).join(", ") : "sin schema";
-  } catch(e) { results.chatterbox_version = "ERROR: " + (e.response?.status || e.message.slice(0,80)); }
-
   res.json(results);
 });
 

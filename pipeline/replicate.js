@@ -1,6 +1,6 @@
 const axios = require("axios");
 
-// Voz de Guillermo clonada — modelo de comunidad XTTS-v2 (no requiere tarjeta extra)
+// Voz de Guillermo clonada — Chatterbox (Resemble AI), mejor calidad que XTTS-v2, modelo comunidad
 const VOICE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
   ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/guillermo-voice.wav`
   : "https://reel-generator-production-5a8d.up.railway.app/guillermo-voice.wav";
@@ -11,12 +11,13 @@ async function generateVoiceover(text) {
   const { data: pred } = await axios.post(
     "https://api.replicate.com/v1/predictions",
     {
-      version: "684bc3855b37866c0c65add2ff39c78f3dea3f4ff103a436465326e0f438d55e",
+      version: "1b8422bc49635c20d0a84e387ed20879c0dd09254ecdb4e75dc4bec10ff94e97",
       input: {
-        text:          text.slice(0, 2000),
-        speaker:       VOICE_URL,
-        language:      "es",
-        cleanup_voice: false
+        prompt:       text.slice(0, 2000),
+        audio_prompt: VOICE_URL,
+        exaggeration: 0.5,
+        cfg_weight:   0.5,
+        temperature:  0.7
       }
     },
     {
@@ -26,7 +27,7 @@ async function generateVoiceover(text) {
   );
 
   const predId = pred.id;
-  if (!predId) throw new Error("XTTS-v2: no prediction id — " + JSON.stringify(pred).slice(0, 200));
+  if (!predId) throw new Error("Chatterbox: no prediction id — " + JSON.stringify(pred).slice(0, 200));
 
   const start = Date.now();
   while (Date.now() - start < 300000) {
