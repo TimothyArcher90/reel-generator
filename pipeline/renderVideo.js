@@ -31,7 +31,8 @@ async function renderVideo({ clips, audioFile, captions, duration, outPath }) {
     "-preset", "fast",
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
-    "-b:a", "192k",
+    "-ar", "44100",
+    "-b:a", "128k",
     "-shortest",
     outPath
   ];
