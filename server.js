@@ -199,6 +199,16 @@ app.get("/test", async (req, res) => {
     results.xtts_inputs = props ? Object.keys(props).join(", ") : "sin schema";
   } catch(e) { results.xtts_version = "ERROR: " + (e.response?.status || e.message.slice(0,80)); }
 
+  // Debug LTX-video: version hash
+  try {
+    const axios = require("axios");
+    const rpKey = process.env.REPLICATE_API_KEY || "";
+    const r = await axios.get("https://api.replicate.com/v1/models/fofr/ltx-video", {
+      headers: { Authorization: `Bearer ${rpKey}` }, timeout: 10000
+    });
+    results.ltx_version = r.data.latest_version?.id;
+  } catch(e) { results.ltx_version = "ERROR: " + (e.response?.status || e.message.slice(0,80)); }
+
   res.json(results);
 });
 

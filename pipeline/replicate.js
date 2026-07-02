@@ -9,12 +9,14 @@ async function generateVoiceover(text) {
   const apiKey = process.env.REPLICATE_API_KEY;
 
   const { data: pred } = await axios.post(
-    "https://api.replicate.com/v1/models/lucataco/xtts-v2/predictions",
+    "https://api.replicate.com/v1/predictions",
     {
+      version: "684bc3855b37866c0c65add2ff39c78f3dea3f4ff103a436465326e0f438d55e",
       input: {
-        text:        text.slice(0, 2000),
-        speaker_wav: VOICE_URL,
-        language:    "es"
+        text:          text.slice(0, 2000),
+        speaker:       VOICE_URL,
+        language:      "es",
+        cleanup_voice: false
       }
     },
     {
@@ -24,7 +26,7 @@ async function generateVoiceover(text) {
   );
 
   const predId = pred.id;
-  if (!predId) throw new Error("MiniMax TTS: no prediction id — " + JSON.stringify(pred).slice(0, 200));
+  if (!predId) throw new Error("XTTS-v2: no prediction id — " + JSON.stringify(pred).slice(0, 200));
 
   const start = Date.now();
   while (Date.now() - start < 300000) {
