@@ -87,7 +87,7 @@ async function runPipeline(jobId, text, baseFilename) {
   log(jobId, `[3/4] Generando ${N} clips AI (Seedance Pro, ~${segDur.toFixed(1)}s c/u)...`);
   const clipUrls = await withTimeout(
     generateAllClips(script.videoPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
-    1500000, "Video clips timeout"
+    Math.max(1500000, N * 300000), "Video clips timeout" // ~5min por segmento, escala con N
   );
   const clipFiles = [];
   for (let i = 0; i < clipUrls.length; i++) {
@@ -104,7 +104,7 @@ async function runPipeline(jobId, text, baseFilename) {
   const outMp4 = path.join("outputs", `${jobId}.mp4`);
   await withTimeout(
     renderVideo({ clips: clipFiles, audioFile, duration, outPath: outMp4 }),
-    300000, "ffmpeg render timeout"
+    Math.max(300000, N * 40000), "ffmpeg render timeout" // escala con N (procesa + N-1 merges xfade)
   );
 
   upd(jobId, {

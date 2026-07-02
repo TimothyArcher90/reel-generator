@@ -5,12 +5,12 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 async function generateScript(articleText) {
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 3000,
+    max_tokens: 6000,
     messages: [{
       role: "user",
       content: `Eres director creativo de una productora premium de contenido financiero/tech (nivel: reels de Bloomberg, a16z, Not Boring). Creas reels que detienen el scroll en 1 segundo.
 
-A partir del artículo, crea un guion de reel de 35-50 segundos (5-6 segmentos).
+A partir del artículo, crea un guion de reel. EL NÚMERO DE SEGMENTOS LO DECIDE EL CONTENIDO, no una regla fija: usa tantos segmentos como haga falta para cubrir con profundidad las ideas reales del artículo — pueden ser 5, pueden ser 12 o más, sin relleno artificial ni ideas forzadas solo para completar un número. Cada segmento entre 4-8 segundos hablados; la duración total del reel es la suma natural de eso, sin límite superior artificial.
 
 IDIOMAS — REGLA ESTRICTA, DOS CAMPOS EN DOS IDIOMAS DISTINTOS:
 - "title", "voiceover" y "captions": 100% ESPAÑOL. Cero palabras en inglés, cero mezcla. Ni siquiera términos técnicos en inglés si existe equivalente en español.
@@ -21,7 +21,7 @@ REGLAS DEL GUION (español):
 - Segmento 1 = HOOK: una frase que genere tensión inmediata o rompa una creencia. Nada de introducciones.
 - Máximo 30 palabras por segmento
 - Lenguaje de trader/filósofo: preciso, provocador, cero relleno
-- Último segmento: cierre que RESUELVE la tensión planteada en el hook, con un giro final que deja pensando — no lo dejes abierto ni cortado, debe sentirse como una conclusión intencional
+- Último segmento: cierre que RESUELVE la tensión planteada en el hook, con un giro final que deja pensando — no lo dejes abierto ni cortado, debe sentirse como una conclusión intencional, editado como cierre profesional, nunca como un corte abrupto a mitad de idea
 - Usa **negritas** para 1-3 palabras clave por segmento
 
 REGLAS DE LOS VIDEO PROMPTS (inglés — van a un modelo text-to-video de alta gama):
