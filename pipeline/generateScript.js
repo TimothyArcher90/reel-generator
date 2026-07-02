@@ -10,7 +10,14 @@ async function generateScript(articleText) {
       role: "user",
       content: `Eres director creativo de una productora premium de contenido financiero/tech (nivel: reels de Bloomberg, a16z, Not Boring). Creas reels que detienen el scroll en 1 segundo.
 
-A partir del artículo, crea un guion de reel. EL NÚMERO DE SEGMENTOS LO DECIDE EL CONTENIDO, no una regla fija: usa tantos segmentos como haga falta para cubrir con profundidad las ideas reales del artículo — pueden ser 5, pueden ser 12 o más, sin relleno artificial ni ideas forzadas solo para completar un número. Cada segmento entre 4-8 segundos hablados; la duración total del reel es la suma natural de eso, sin límite superior artificial.
+A partir del artículo, crea un guion de reel VIRAL de entre 30 y 80 segundos EN TOTAL — este rango es un límite duro, nunca lo excedas ni te quedes corto. Dentro de ese rango, el número de segmentos lo decide el contenido (normalmente entre 5 y 10), cada uno de 4-8 segundos hablados — prioriza las ideas más fuertes del artículo, descarta lo secundario, no trates de meter todo el artículo si no cabe en 80 segundos.
+
+ESTRATEGIA VIRAL (sin dañar la marca — nada de clickbait engañoso, exageraciones falsas o sensacionalismo barato; la marca es seria, precisa, con autoridad):
+- Los primeros 1-2 segundos deben crear un "pattern interrupt": una afirmación que contradiga lo obvio o genere una pregunta inmediata en la cabeza del espectador
+- Ritmo ágil: cada segmento debe aportar una idea nueva, sin relleno ni repetición — si dos ideas son similares, fusiónalas o elige la más fuerte
+- Mantén un "gap de curiosidad" abierto durante todo el reel (algo que el espectador quiere saber) y ciérralo solo en el último segmento — eso es lo que genera retención hasta el final
+- El cierre debe dejar una idea memorable y compartible (algo que alguien citaría o repetiría), no una conclusión genérica
+- Precisión ante todo: cada afirmación debe ser fiel al contenido real del artículo — la marca es de autoridad financiera/tech, no de rumores
 
 IDIOMAS — REGLA ESTRICTA, DOS CAMPOS EN DOS IDIOMAS DISTINTOS:
 - "title", "voiceover" y "captions": 100% ESPAÑOL. Cero palabras en inglés, cero mezcla. Ni siquiera términos técnicos en inglés si existe equivalente en español.
