@@ -1,7 +1,16 @@
-const { spawn } = require("child_process");
-const ffmpegPath = require("ffmpeg-static");
+const { spawn, execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+
+// Preferir ffmpeg del sistema (nixpacks, trae drawtext); fallback a ffmpeg-static
+let ffmpegPath;
+try {
+  execSync("ffmpeg -version", { stdio: "ignore" });
+  ffmpegPath = "ffmpeg";
+} catch {
+  ffmpegPath = require("ffmpeg-static");
+}
+console.log("ffmpeg en uso:", ffmpegPath);
 
 const FONT = path.resolve(__dirname, "..", "fonts", "bold.ttf").replace(/\\/g, "/");
 
