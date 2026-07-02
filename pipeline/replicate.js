@@ -7,15 +7,16 @@ const VOICE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
 async function generateVoiceover(text) {
   const apiKey = process.env.REPLICATE_API_KEY;
 
-  // Start prediction
+  // Start prediction — community models need /v1/predictions + version hash
   const { data: pred } = await axios.post(
-    "https://api.replicate.com/v1/models/lucataco/xtts-v2/predictions",
+    "https://api.replicate.com/v1/predictions",
     {
+      version: "e876df565d4d629da440ce5820d1d2c8c2adb963f52e526efc064911f841f85e",
       input: {
         text,
-        speaker:         VOICE_URL,
-        language:        "es",
-        cleanup_voice:   false
+        speaker:       VOICE_URL,
+        language:      "es",
+        cleanup_voice: false
       }
     },
     {

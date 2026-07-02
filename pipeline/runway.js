@@ -7,14 +7,16 @@ const MODEL = "wavespeedai/wan-2.1-t2v-720p";
 async function generateClip(prompt) {
   const apiKey = process.env.REPLICATE_API_KEY;
 
+  // WAN 2.1 text-to-video via Replicate
   const { data: pred } = await axios.post(
-    `https://api.replicate.com/v1/models/${MODEL}/predictions`,
+    "https://api.replicate.com/v1/predictions",
     {
+      version: "f2a791ec34beb7fe730406b9e0ee91c5aad71a0989b2b68668bbed4d028cb67e",
       input: {
         prompt,
-        aspect_ratio: "9:16",
-        num_frames:   81,
-        sample_steps: 30,
+        aspect_ratio:       "9:16",
+        num_frames:         81,
+        sample_steps:       30,
         sample_guide_scale: 6
       }
     },
