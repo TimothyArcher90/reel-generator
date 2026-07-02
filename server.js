@@ -4,7 +4,7 @@ const path    = require("path");
 const fs      = require("fs");
 
 const { generateScript }    = require("./pipeline/generateScript");
-const { generateVoiceover } = require("./pipeline/replicate");
+const { generateVoiceover } = require("./pipeline/edgetts");
 const { generateAllClips }  = require("./pipeline/higgsfieldCloud");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 const { renderVideo }       = require("./pipeline/renderVideo");
@@ -72,12 +72,11 @@ async function runPipeline(jobId, text, baseFilename) {
   const N = script.captions.length;
   log(jobId, `Guion listo: "${script.title}" — ${N} segmentos`);
 
-  // Step 2 — Voz de Guillermo (MiniMax Speech-02 HD, voice_id clonado)
-  upd(jobId, { step: 2, statusMsg: "Generando voz de Guillermo..." });
+  // Step 2 — Voz (Edge-TTS, gratis y sin billing — escribe directo al archivo)
+  upd(jobId, { step: 2, statusMsg: "Generando voz..." });
   log(jobId, "[2/4] Generando voz...");
   const audioFile = path.join(workDir, "audio.mp3");
-  const audioUrl = await withTimeout(generateVoiceover(script.voiceover), 180000, "Voiceover timeout");
-  await downloadFile(audioUrl, audioFile);
+  await withTimeout(generateVoiceover(script.voiceover, audioFile), 120000, "Voiceover timeout");
   const duration = await getAudioDuration(audioFile);
   log(jobId, `Voz lista — ${duration}s`);
 
@@ -217,11 +216,12 @@ app.get("/test", async (req, res) => {
   res.json(results);
 });
 
-// ── GET /test-voice ── prueba barata (~$0.01) de la voz de Guillermo ────────
+// ── GET /test-voice ── prueba gratis de la voz Edge-TTS ─────────────────────
 app.get("/test-voice", async (req, res) => {
   try {
-    const url = await generateVoiceover("Hola, soy Guillermo. Esta es una prueba de mi voz clonada para los reels.");
-    res.json({ ok: true, audio: url, nota: "Abre el link 'audio' para escuchar la voz clonada" });
+    const out = path.join("outputs", "test-voice.mp3");
+    await generateVoiceover("Hola, esta es una prueba de la voz para los reels del equipo.", out);
+    res.json({ ok: true, audio: "/download/test-voice.mp3", nota: "Abre el link 'audio' para escuchar la voz" });
   } catch (e) {
     res.status(500).json({ ok: false, error: friendlyError(e) });
   }
