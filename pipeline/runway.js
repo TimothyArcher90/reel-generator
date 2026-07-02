@@ -1,15 +1,9 @@
 const axios = require("axios");
 
-// Video AI premium — Kling v1.6 Standard via Replicate. Elegido específicamente por
-// su fuerte adherencia al prompt (cfg_scale alto = sigue el texto de forma literal),
-// que era la causa real de que el video no tuviera relación con el guion en modelos
-// anteriores (LTX-video, Seedance-lite). Requiere tarjeta débito/crédito en Replicate.
-const VERSION = "e6f571e8d6990da3c96abf8d3082894024d652822f0ca3cd244acece84a1cc3e";
-const ALLOWED_DURATIONS = [5, 10]; // únicos valores que acepta Kling
-
-function pickDuration(segDurSeconds) {
-  return ALLOWED_DURATIONS.find(d => d >= segDurSeconds) || ALLOWED_DURATIONS[ALLOWED_DURATIONS.length - 1];
-}
+// Video AI premium — ByteDance Seedance 1 Pro via Replicate. Rápido y confiable
+// (confirmado con prueba real), tier superior a seedance-1-lite. Kling se descartó
+// por quedarse atascado 18+ min en una prueba real sin completar.
+const VERSION = "a5fd550893da3b6f67997812759065652454ddaca10e96b83b59cbae1814cb36";
 
 async function createPrediction(input, apiKey) {
   const { data } = await axios.post(
@@ -17,7 +11,7 @@ async function createPrediction(input, apiKey) {
     { version: VERSION, input },
     { headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, timeout: 30000 }
   );
-  if (!data.id) throw new Error("Kling: no prediction id — " + JSON.stringify(data).slice(0, 200));
+  if (!data.id) throw new Error("Seedance: no prediction id — " + JSON.stringify(data).slice(0, 200));
   return data.id;
 }
 
@@ -43,12 +37,14 @@ async function waitForPrediction(predId, apiKey, timeoutMs = 600000) {
 
 async function generateClip(prompt, segDurSeconds) {
   const apiKey = process.env.REPLICATE_API_KEY;
+  const duration = Math.min(12, Math.max(4, Math.ceil(segDurSeconds)));
 
   const id = await createPrediction({
     prompt,
-    duration:     pickDuration(segDurSeconds),
+    duration,
+    resolution:   "720p",
     aspect_ratio: "9:16",
-    cfg_scale:    0.8 // alto = mayor fidelidad al prompt, menos libertad creativa
+    camera_fixed: false
   }, apiKey);
   return await waitForPrediction(id, apiKey);
 }
@@ -73,7 +69,7 @@ async function generateClipWithRetry(prompt, segDurSeconds, maxRetries = 3) {
 async function generateAllClips(prompts, segDurSeconds, onProgress) {
   const urls = [];
   for (let i = 0; i < prompts.length; i++) {
-    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (Kling)...`);
+    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (Seedance Pro)...`);
     urls.push(await generateClipWithRetry(prompts[i], segDurSeconds));
     if (i < prompts.length - 1) await sleep(2000);
   }
