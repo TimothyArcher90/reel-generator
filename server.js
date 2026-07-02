@@ -40,8 +40,9 @@ app.post("/start", (req, res) => {
   res.json({ jobId });
 
   runPipeline(jobId, text, filename || "reel").catch(err => {
-    log(jobId, "FATAL: " + err.message);
-    upd(jobId, { status: "error", error: err.message });
+    const msg = (err && err.message) ? err.message : String(err);
+    log(jobId, "FATAL: " + msg);
+    upd(jobId, { status: "error", error: msg });
   });
 });
 
@@ -163,6 +164,27 @@ app.get("/test", async (req, res) => {
     const ffmpegPath = require("ffmpeg-static");
     results.ffmpeg = ffmpegPath ? "OK — " + ffmpegPath : "ERROR: path vacío";
   } catch(e) { results.ffmpeg = "ERROR: " + e.message.slice(0,100); }
+
+  // Test Edge-TTS
+  try {
+    const { MsEdgeTTS, OUTPUT_FORMAT } = require("msedge-tts");
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata("es-CO-GonzaloNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+    results.edgetts = "OK — voz es-CO-GonzaloNeural lista";
+  } catch(e) { results.edgetts = "ERROR: " + String(e).slice(0,200); }
+
+  // Test Pexels
+  try {
+    const axios = require("axios");
+    const pKey = process.env.PEXELS_API_KEY || "";
+    results.pexels_key = pKey ? "presente" : "FALTA — agrega PEXELS_API_KEY en Railway";
+    if (pKey) {
+      const r = await axios.get("https://api.pexels.com/videos/search", {
+        headers: { Authorization: pKey }, params: { query: "business", per_page: 1 }, timeout: 8000
+      });
+      results.pexels_api = "OK — " + r.data.total_results + " videos";
+    }
+  } catch(e) { results.pexels_api = "ERROR: " + (e.response?.status || e.message.slice(0,80)); }
 
   res.json(results);
 });

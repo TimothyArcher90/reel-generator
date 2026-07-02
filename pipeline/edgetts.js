@@ -9,12 +9,16 @@ async function generateVoiceover(text, outputPath) {
   await tts.setMetadata(VOICE, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
 
   return new Promise((resolve, reject) => {
-    const readable = tts.toStream(text);
-    const writer = fs.createWriteStream(outputPath);
-    readable.pipe(writer);
-    writer.on("finish", () => resolve(outputPath));
-    writer.on("error", reject);
-    readable.on("error", reject);
+    try {
+      const readable = tts.toStream(text);
+      const writer = fs.createWriteStream(outputPath);
+      readable.pipe(writer);
+      writer.on("finish", () => resolve(outputPath));
+      writer.on("error", (e) => reject(new Error("TTS write error: " + String(e))));
+      readable.on("error", (e) => reject(new Error("TTS stream error: " + String(e))));
+    } catch (e) {
+      reject(new Error("TTS init error: " + String(e)));
+    }
   });
 }
 
