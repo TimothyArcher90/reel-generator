@@ -1,23 +1,24 @@
 const axios = require("axios");
 
-// Voz de Guillermo clonada — Chatterbox (Resemble AI), mejor calidad que XTTS-v2, modelo comunidad
-const VOICE_URL = process.env.RAILWAY_PUBLIC_DOMAIN
-  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/guillermo-voice.wav`
-  : "https://reel-generator-production-5a8d.up.railway.app/guillermo-voice.wav";
+// Voz de Guillermo clonada en MiniMax (Speech-02 HD) — la única confirmada que suena
+// a él. Requiere tarjeta débito/crédito en Replicate (modelo "partner oficial").
+const GUILLERMO_VOICE_ID = process.env.GUILLERMO_VOICE_ID || "R8_5WN1DFXN";
 
 async function generateVoiceover(text) {
   const apiKey = process.env.REPLICATE_API_KEY;
 
   const { data: pred } = await axios.post(
-    "https://api.replicate.com/v1/predictions",
+    "https://api.replicate.com/v1/models/minimax/speech-02-hd/predictions",
     {
-      version: "1b8422bc49635c20d0a84e387ed20879c0dd09254ecdb4e75dc4bec10ff94e97",
       input: {
-        prompt:       text.slice(0, 2000),
-        audio_prompt: VOICE_URL,
-        exaggeration: 0.5,
-        cfg_weight:   0.5,
-        temperature:  0.7
+        text,
+        voice_id:              GUILLERMO_VOICE_ID,
+        speed:                 1,
+        volume:                1,
+        pitch:                 0,
+        emotion:               "neutral",
+        language_boost:        "Spanish",
+        english_normalization: false
       }
     },
     {
@@ -27,7 +28,7 @@ async function generateVoiceover(text) {
   );
 
   const predId = pred.id;
-  if (!predId) throw new Error("Chatterbox: no prediction id — " + JSON.stringify(pred).slice(0, 200));
+  if (!predId) throw new Error("MiniMax TTS: no prediction id — " + JSON.stringify(pred).slice(0, 200));
 
   const start = Date.now();
   while (Date.now() - start < 300000) {

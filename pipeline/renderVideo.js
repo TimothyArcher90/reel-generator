@@ -66,18 +66,16 @@ async function renderVideo({ clips, audioFile, captions, duration, outPath }) {
   const segDur = Math.max(3, duration / N);
   const workDir = path.dirname(clips[0]);
   const w = 720, h = 1280;
-  const fade = 0.35;
+  const trans = 0.5; // duración del crossfade entre clips
 
-  // 1. Procesar cada clip: recorte, escala, fade in/out, caption propio
+  // 1. Procesar cada clip: recorte exacto a segDur, escala, caption propio (sin fade — el
+  //    crossfade entre clips lo hace xfade en el paso 2)
   const parts = [];
   for (let i = 0; i < N; i++) {
     const part = path.join(workDir, `part${i}.mp4`);
     const lines = twoLines(safeText(captions[i]));
 
     let vf = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=30,format=yuv420p`;
-    // Fade in y out por clip = transición profesional entre segmentos
-    vf += `,fade=t=in:st=0:d=${fade},fade=t=out:st=${(segDur - fade).toFixed(2)}:d=${fade}`;
-    // Captions centrados abajo, caja semitransparente, 1-2 líneas (solo si ffmpeg soporta drawtext)
     if (HAS_DRAWTEXT) {
       const baseY = lines.length === 2 ? "h*0.70" : "h*0.73";
       lines.forEach((line, li) => {
@@ -97,15 +95,39 @@ async function renderVideo({ clips, audioFile, captions, duration, outPath }) {
     parts.push(part);
   }
 
-  // 2. Concat demuxer (stream copy, sin memoria)
-  const listFile = path.join(workDir, "list.txt");
-  fs.writeFileSync(listFile, parts.map(p => `file '${path.resolve(p).replace(/\\/g, "/")}'`).join("\n"));
-  const joined = path.join(workDir, "joined.mp4");
-  await run(["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", joined], "concat");
+  // 2. Unir con crossfade real (xfade), de a pares consecutivos — bajo consumo de
+  //    memoria porque solo decodifica 2 clips (ya livianos) a la vez, en vez de los
+  //    N clips originales en un solo filtro gigante (eso provocaba OOM en Railway).
+  let acc = parts[0];
+  let accDur = segDur;
+  for (let i = 1; i < N; i++) {
+    const offset = Math.max(0, accDur - trans);
+    const merged = path.join(workDir, `merge${i}.mp4`);
+    await run([
+      "-y", "-i", acc, "-i", parts[i],
+      "-filter_complex", `[0:v][1:v]xfade=transition=fade:duration=${trans}:offset=${offset.toFixed(2)}[v]`,
+      "-map", "[v]",
+      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
+      merged
+    ], `xfade ${i}`);
+    acc = merged;
+    accDur = accDur + segDur - trans;
+  }
 
-  // 3. Mux con la voz de Guillermo
+  // 3. Cierre: fade-to-black suave sobre el video ya unido, para que termine con
+  //    intención en vez de cortarse en seco.
+  const closeFade = 0.6;
+  const faded = path.join(workDir, "faded.mp4");
   await run([
-    "-y", "-i", joined, "-i", audioFile,
+    "-y", "-i", acc,
+    "-vf", `fade=t=out:st=${Math.max(0, accDur - closeFade).toFixed(2)}:d=${closeFade}`,
+    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
+    faded
+  ], "cierre fade-to-black");
+
+  // 4. Mux con la voz de Guillermo
+  await run([
+    "-y", "-i", faded, "-i", audioFile,
     "-map", "0:v", "-map", "1:a",
     "-c:v", "copy",
     "-c:a", "aac", "-ar", "44100", "-b:a", "128k",

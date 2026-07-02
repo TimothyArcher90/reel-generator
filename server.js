@@ -81,11 +81,12 @@ async function runPipeline(jobId, text, baseFilename) {
   const duration = await getAudioDuration(audioFile);
   log(jobId, `Voz lista — ${duration}s`);
 
-  // Step 3 — Video clips
+  // Step 3 — Video clips (duración de cada clip alineada con su tramo de audio)
+  const segDur = Math.max(3, duration / N);
   upd(jobId, { step: 3, statusMsg: `Generando ${N} clips de video...` });
-  log(jobId, `[3/4] Generando ${N} clips AI (Seedance)...`);
+  log(jobId, `[3/4] Generando ${N} clips AI (LTX-Video, ~${segDur.toFixed(1)}s c/u)...`);
   const clipUrls = await withTimeout(
-    generateAllClips(script.videoPrompts, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
+    generateAllClips(script.videoPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
     1500000, "Video clips timeout"
   );
   const clipFiles = [];
