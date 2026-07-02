@@ -62,21 +62,16 @@ async function generateClipWithRetry(prompt, segDurSeconds, maxRetries = 5) {
   }
 }
 
-// Genera en lotes de 3, escalonando el inicio de cada request dentro del lote
-// (en vez de dispararlas todas al mismo milisegundo) para no saturar el rate
-// limit de Replicate — eso era lo que causaba 429 incluso con retry.
+// Secuencial: el paralelo (incluso escalonado 4s) sigue chocando con el rate
+// limit de Replicate en esta cuenta. Confiabilidad > velocidad — cada clip tarda
+// 3-4 min, así que un reel de 6-8 clips toma ~25-30 min, corriendo solo sin que
+// nadie tenga que estar pendiente de la pantalla.
 async function generateAllClips(prompts, segDurSeconds, onProgress) {
-  const BATCH   = 3;
-  const STAGGER = 4000; // ms entre el inicio de cada request dentro del lote
   const urls = [];
-  for (let i = 0; i < prompts.length; i += BATCH) {
-    const slice = prompts.slice(i, i + BATCH);
-    onProgress(`Generando clips ${i + 1}-${Math.min(i + BATCH, prompts.length)} de ${prompts.length} (Seedance Pro)...`);
-    const batchUrls = await Promise.all(slice.map(async (p, idx) => {
-      if (idx > 0) await sleep(idx * STAGGER);
-      return generateClipWithRetry(p, segDurSeconds);
-    }));
-    urls.push(...batchUrls);
+  for (let i = 0; i < prompts.length; i++) {
+    onProgress(`Generando clip ${i + 1} de ${prompts.length} (Seedance Pro)...`);
+    urls.push(await generateClipWithRetry(prompts[i], segDurSeconds));
+    if (i < prompts.length - 1) await sleep(3000);
   }
   return urls;
 }
