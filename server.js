@@ -83,7 +83,7 @@ async function runPipeline(jobId, text, baseFilename) {
 
   // Step 3 — Video clips
   upd(jobId, { step: 3, statusMsg: `Generando ${N} clips de video...` });
-  log(jobId, `[3/4] Generando ${N} clips en Replicate (WAN 2.1)...`);
+  log(jobId, `[3/4] Buscando ${N} clips en Pexels...`);
   const clipUrls = await withTimeout(
     generateAllClips(script.videoPrompts, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
     700000, "Video clips timeout"
