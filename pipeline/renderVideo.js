@@ -53,10 +53,17 @@ async function renderVideo({ clips, audioFile, captions, duration, outPath }) {
     const start = i * segDur + 0.4;
     const end   = (i + 1) * segDur - 0.4;
     const safe  = text
-      .replace(/'/g, "’")
-      .replace(/\*\*/g, "")
-      .replace(/\\n/g, "\n")
-      .substring(0, 120);
+      .replace(/\\/g, "")
+      .replace(/’/g, "’")
+      .replace(/’/g, "’")
+      .replace(/:/g, "∶")
+      .replace(/\[/g, "(")
+      .replace(/\]/g, ")")
+      .replace(/\*/g, "")
+      .replace(/"/g, "”")
+      .replace(/\n/g, " ")
+      .trim()
+      .substring(0, 100);
     captionFilter +=
       `drawtext=text='${safe}':` +
       `fontsize=52:fontcolor=white:` +
