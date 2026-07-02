@@ -31,8 +31,8 @@ REGLAS DEL GUION (español):
 - Último segmento: cierre que RESUELVE la tensión planteada en el hook, con un giro final que deja pensando — no lo dejes abierto ni cortado, debe sentirse como una conclusión intencional, editado como cierre profesional, nunca como un corte abrupto a mitad de idea
 - Usa **negritas** para 1-3 palabras clave por segmento
 
-REGLAS DE LOS VIDEO PROMPTS (inglés — van a un modelo text-to-video, PRIORIDAD MÁXIMA: CERO AMBIGÜEDAD):
-El modelo de video interpreta literalmente cada palabra. Si una palabra admite dos lecturas visuales, el modelo elige la que NO queremos. Por eso cada prompt debe describir UNA sola imagen posible, sin espacio para interpretación.
+REGLAS VISUALES (inglés — el pipeline genera primero UNA IMAGEN por segmento y luego la ANIMA; por eso hay DOS campos: imagePrompts y motionPrompts. PRIORIDAD MÁXIMA: CERO AMBIGÜEDAD):
+El generador interpreta literalmente cada palabra. Cada imagePrompt debe describir UNA sola imagen posible, sin espacio para interpretación.
 
 Para cada segmento, elige EXACTAMENTE UNO de estos sujetos (no combines, no ofrezcas alternativas con "or"; comprométete a uno solo):
   * Crecimiento / escala / expansión → una cordillera montañosa nevada vista desde un dron, extendiéndose hasta el horizonte
@@ -45,20 +45,26 @@ Para cada segmento, elige EXACTAMENTE UNO de estos sujetos (no combines, no ofre
   * Origen / fundamentos / biología → una doble hélice de ADN esculpida en metal sólido, iluminada desde un lado
   * Cosmos / incertidumbre / escala infinita → un planeta rocoso visto desde una nave, con estrellas de fondo
   * Precisión / ingeniería / maquinaria → brazos robóticos industriales de metal ensamblando piezas con precisión
-- Estructura OBLIGATORIA de cada prompt, en este orden exacto y sin desviarte:
-  1. Tipo de plano exacto (elige UNO): "Extreme close-up shot", "Close-up shot", "Medium shot", "Wide shot", "Aerial drone shot", "Low-angle shot"
-  2. El sujeto elegido de la lista de arriba, con máximo 2 adjetivos de material/color (ej. "dark brushed steel", "amber-lit")
-  3. UN solo verbo de movimiento de cámara (elige UNO): "orbits slowly around", "pushes in toward", "pulls back from", "glides forward over", "tilts up along"
-  4. Una sola fuente de luz descrita literalmente (ej. "lit by a single strong light source from the left, casting hard shadows")
-  5. Cierra siempre con esta frase exacta, sin modificarla: "cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people"
-- PROHIBIDO usar palabras abstractas o metafóricas que no describan un objeto físico real: nada de "energy", "flow" (como sustantivo suelto), "power" (como sustantivo suelto), "essence", "spirit", "concept". Si necesitas expresar una idea abstracta, tradúcela SIEMPRE al objeto físico concreto de la lista de arriba.
-- No repitas el mismo sujeto en dos segmentos distintos
-- Cada prompt DEBE usar un tipo de plano y un movimiento de cámara distintos al del prompt anterior
-- El prompt 1 (opening) debe ser el más espectacular e imponente: es lo que detiene el scroll
-- El ÚLTIMO prompt debe usar "pulls back from" o "tilts up along" para transmitir conclusión/revelación, coordinado con el cierre narrativo del último segmento
 
-EJEMPLO de prompt correcto (para un segmento sobre "el capital rota hacia nuevos sectores"):
-"Aerial drone shot of a dense fiber optic cable network with amber light traveling through the cables, strung between skyscrapers in a night city, camera glides forward over the network as the light constantly reroutes toward new buildings, lit by the amber glow from within the cables casting hard shadows on the buildings below, cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people"
+imagePrompts[i] — la COMPOSICIÓN ESTÁTICA (sin cámara, sin movimiento):
+  1. Tipo de plano exacto (elige UNO): "Extreme close-up shot", "Close-up shot", "Medium shot", "Wide shot", "Aerial drone shot", "Low-angle shot"
+  2. El sujeto elegido de la lista, con máximo 2 adjetivos de material/color (ej. "dark brushed steel", "amber-lit")
+  3. Una sola fuente de luz descrita literalmente (ej. "lit by a single strong light source from the left, casting hard shadows")
+  4. Cierra siempre con esta frase exacta: "cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people"
+
+motionPrompts[i] — SOLO el movimiento (para animar esa imagen):
+  - UN solo movimiento de cámara (elige UNO): "camera orbits slowly around the subject", "camera pushes in toward the subject", "camera pulls back from the subject", "camera glides forward over the scene", "camera tilts up along the subject"
+  - + UN movimiento interno de la escena en máximo 8 palabras (ej. "waves crash against the rocks", "amber lights pulse through the cables", "gears rotate steadily")
+
+- PROHIBIDO usar palabras abstractas que no describan un objeto físico real: nada de "energy", "flow" (sustantivo suelto), "power" (sustantivo suelto), "essence", "spirit", "concept"
+- No repitas el mismo sujeto en dos segmentos distintos
+- Cada segmento DEBE usar tipo de plano y movimiento de cámara distintos al del segmento anterior
+- El segmento 1 (opening) debe ser el más espectacular e imponente: es lo que detiene el scroll
+- El ÚLTIMO motionPrompt debe usar "camera pulls back" o "camera tilts up" para transmitir conclusión/revelación
+
+EJEMPLO correcto (segmento sobre "el capital rota hacia nuevos sectores"):
+imagePrompt: "Aerial drone shot of a dense fiber optic cable network with amber light inside the cables, strung between skyscrapers in a night city, lit by the amber glow from within the cables casting hard shadows on the buildings below, cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people"
+motionPrompt: "camera glides forward over the scene, amber light pulses rerouting between buildings"
 
 RESPONDE SOLO con este JSON (sin markdown):
 {
@@ -66,10 +72,11 @@ RESPONDE SOLO con este JSON (sin markdown):
   "lang": "es",
   "voiceover": "Texto completo para voz en off EN ESPAÑOL, puntuación natural para pausas",
   "captions": ["Segmento 1 EN ESPAÑOL con **palabras clave**", "..."],
-  "videoPrompts": ["prompt EN INGLÉS ligado al segmento 1...", "..."]
+  "imagePrompts": ["composición EN INGLÉS del segmento 1...", "..."],
+  "motionPrompts": ["movimiento EN INGLÉS del segmento 1...", "..."]
 }
 
-captions y videoPrompts deben tener el MISMO número de elementos, y cada videoPrompts[i] debe corresponder visualmente a captions[i].
+captions, imagePrompts y motionPrompts deben tener el MISMO número de elementos, y cada imagePrompts[i]/motionPrompts[i] debe corresponder visualmente a captions[i].
 
 ARTÍCULO:
 ${articleText.slice(0, 8000)}`

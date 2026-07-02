@@ -5,7 +5,7 @@ const fs      = require("fs");
 
 const { generateScript }    = require("./pipeline/generateScript");
 const { generateVoiceover } = require("./pipeline/replicate");
-const { generateAllClips }  = require("./pipeline/runway");
+const { generateAllClips }  = require("./pipeline/higgsfieldCloud");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 const { renderVideo }       = require("./pipeline/renderVideo");
 
@@ -40,7 +40,7 @@ app.post("/start", (req, res) => {
   res.json({ jobId });
 
   runPipeline(jobId, text, filename || "reel").catch(err => {
-    const msg = (err && err.message) ? err.message : String(err);
+    const msg = friendlyError(err);
     log(jobId, "FATAL: " + msg);
     upd(jobId, { status: "error", error: msg });
   });
@@ -81,13 +81,17 @@ async function runPipeline(jobId, text, baseFilename) {
   const duration = await getAudioDuration(audioFile);
   log(jobId, `Voz lista — ${duration}s`);
 
-  // Step 3 — Video clips (duración de cada clip alineada con su tramo de audio)
+  // Step 3 — Video clips (Higgsfield Cloud: imagen Soul + animación DoP por segmento)
   const segDur = Math.max(3, duration / N);
+  // Pares imagen/movimiento; fallback a videoPrompts si el guion viene en formato viejo
+  const visualPrompts = (script.imagePrompts && script.motionPrompts)
+    ? script.imagePrompts.map((img, i) => ({ image: img, motion: script.motionPrompts[i] || "slow cinematic camera movement" }))
+    : (script.videoPrompts || []);
   upd(jobId, { step: 3, statusMsg: `Generando ${N} clips de video...` });
-  log(jobId, `[3/4] Generando ${N} clips AI (Seedance Pro, ~${segDur.toFixed(1)}s c/u)...`);
+  log(jobId, `[3/4] Generando ${N} clips (Higgsfield Soul+DoP, ~${segDur.toFixed(1)}s c/u)...`);
   const clipUrls = await withTimeout(
-    generateAllClips(script.videoPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
-    Math.max(1500000, N * 300000), "Video clips timeout" // ~5min por segmento, escala con N
+    generateAllClips(visualPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
+    Math.max(1500000, N * 400000), "Video clips timeout" // imagen+video por segmento, escala con N
   );
   const clipFiles = [];
   for (let i = 0; i < clipUrls.length; i++) {
@@ -122,6 +126,28 @@ function withTimeout(promise, ms, label) {
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))
   ]);
+}
+
+// Traduce errores técnicos a mensajes accionables para el equipo (sin llamar a David)
+function friendlyError(err) {
+  const raw = (err && err.message) ? err.message : String(err);
+  const status = err?.response?.status;
+  const body = JSON.stringify(err?.response?.data || "").toLowerCase();
+
+  if (raw.includes("SIN CRÉDITO en Higgsfield")) return raw;
+  if (status === 402 || body.includes("insufficient credit")) {
+    return "SIN CRÉDITO en Replicate (voz) — recargar en replicate.com/account/billing y reintentar en unos minutos.";
+  }
+  if (status === 401 || body.includes("unauthenticated") || body.includes("invalid api key")) {
+    return "CLAVE API INVÁLIDA — revisar las variables de API en Railway (HF_CLOUD_KEY/SECRET o REPLICATE_API_KEY).";
+  }
+  if (status === 429) {
+    return "LÍMITE DE VELOCIDAD del proveedor — esperar 2-3 minutos y volver a intentar.";
+  }
+  if (raw.includes("timeout") || raw.includes("Timeout")) {
+    return "TIEMPO AGOTADO en un paso (" + raw + ") — volver a intentar; si se repite, avisar al administrador.";
+  }
+  return raw;
 }
 
 // ── GET /test ── diagnóstico rápido ─────────────────────────────────────────
@@ -197,7 +223,18 @@ app.get("/test-voice", async (req, res) => {
     const url = await generateVoiceover("Hola, soy Guillermo. Esta es una prueba de mi voz clonada para los reels.");
     res.json({ ok: true, audio: url, nota: "Abre el link 'audio' para escuchar la voz clonada" });
   } catch (e) {
-    res.status(500).json({ ok: false, error: (e.response?.data?.detail) || e.message });
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
+});
+
+// ── GET /test-image ── prueba barata de Higgsfield Cloud (1 imagen Soul) ─────
+app.get("/test-image", async (req, res) => {
+  try {
+    const { generateImage } = require("./pipeline/higgsfieldCloud");
+    const url = await generateImage("Low-angle shot of a glass and steel financial skyscraper photographed from the base looking up, lit by a single strong light source from the left casting hard shadows, cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people");
+    res.json({ ok: true, image: url, nota: "Si ves la imagen, las claves de Higgsfield Cloud funcionan" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
   }
 });
 
