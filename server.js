@@ -84,7 +84,7 @@ async function runPipeline(jobId, text, baseFilename) {
   // Step 3 — Video clips (duración de cada clip alineada con su tramo de audio)
   const segDur = Math.max(3, duration / N);
   upd(jobId, { step: 3, statusMsg: `Generando ${N} clips de video...` });
-  log(jobId, `[3/4] Generando ${N} clips AI (LTX-Video, ~${segDur.toFixed(1)}s c/u)...`);
+  log(jobId, `[3/4] Generando ${N} clips AI (Seedance, ~${segDur.toFixed(1)}s c/u)...`);
   const clipUrls = await withTimeout(
     generateAllClips(script.videoPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
     1500000, "Video clips timeout"
@@ -103,7 +103,7 @@ async function runPipeline(jobId, text, baseFilename) {
   log(jobId, "[4/4] Renderizando con ffmpeg...");
   const outMp4 = path.join("outputs", `${jobId}.mp4`);
   await withTimeout(
-    renderVideo({ clips: clipFiles, audioFile, captions: script.captions, duration, outPath: outMp4 }),
+    renderVideo({ clips: clipFiles, audioFile, duration, outPath: outMp4 }),
     300000, "ffmpeg render timeout"
   );
 

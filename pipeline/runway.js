@@ -1,17 +1,9 @@
 const axios = require("axios");
 
-// Video AI de alta calidad via Replicate — modelo de comunidad (no requiere tarjeta extra)
-const VERSION = "8c47da666861d081eeb4d1261853087de23923a268a69b63febdf5dc1dee08e4";
-const LTX_FPS = 25; // confirmado con metadata real: length=97 frames -> 3.88s
-const ALLOWED_LENGTHS = [97, 129, 161, 193, 225, 257];
-
-// Elige el valor de "length" (frames) más cercano por ARRIBA de la duración de segmento
-// pedida, para que el clip nunca quede más corto que el audio que lo acompaña.
-function pickLength(segDurSeconds) {
-  const neededFrames = segDurSeconds * LTX_FPS;
-  const fit = ALLOWED_LENGTHS.find(f => f >= neededFrames);
-  return fit || ALLOWED_LENGTHS[ALLOWED_LENGTHS.length - 1];
-}
+// Video AI premium — ByteDance Seedance 1 Lite via Replicate. Calidad muy superior
+// a los modelos de comunidad gratuitos; requiere tarjeta débito/crédito en Replicate
+// (modelo "partner oficial", igual que la voz de Guillermo en MiniMax).
+const VERSION = "6e47dd83529ee0599c68f274f225635080e4fd218360a85e2a3a78396d388b73";
 
 async function createPrediction(input, apiKey) {
   const { data } = await axios.post(
@@ -19,7 +11,7 @@ async function createPrediction(input, apiKey) {
     { version: VERSION, input },
     { headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, timeout: 30000 }
   );
-  if (!data.id) throw new Error("LTX-video: no prediction id — " + JSON.stringify(data).slice(0, 200));
+  if (!data.id) throw new Error("Seedance: no prediction id — " + JSON.stringify(data).slice(0, 200));
   return data.id;
 }
 
@@ -45,13 +37,14 @@ async function waitForPrediction(predId, apiKey, timeoutMs = 600000) {
 
 async function generateClip(prompt, segDurSeconds) {
   const apiKey = process.env.REPLICATE_API_KEY;
+  const duration = Math.min(12, Math.max(4, Math.ceil(segDurSeconds)));
 
   const id = await createPrediction({
     prompt,
-    aspect_ratio: "9:16",
-    length:       pickLength(segDurSeconds),
-    target_size:  640,
-    steps:        30
+    duration,
+    resolution:    "720p",
+    aspect_ratio:  "9:16",
+    camera_fixed:  false
   }, apiKey);
   return await waitForPrediction(id, apiKey);
 }
@@ -78,7 +71,7 @@ async function generateClipWithRetry(prompt, segDurSeconds, maxRetries = 3) {
 async function generateAllClips(prompts, segDurSeconds, onProgress) {
   const urls = [];
   for (let i = 0; i < prompts.length; i++) {
-    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (LTX-Video)...`);
+    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (Seedance)...`);
     urls.push(await generateClipWithRetry(prompts[i], segDurSeconds));
     if (i < prompts.length - 1) await sleep(2000);
   }

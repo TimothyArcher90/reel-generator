@@ -26,17 +26,18 @@ REGLAS DEL GUION (español):
 
 REGLAS DE LOS VIDEO PROMPTS (inglés — van a un modelo text-to-video de alta gama):
 - CADA prompt debe representar VISUALMENTE el concepto específico de SU segmento — extrae el sustantivo o metáfora concreta de ese caption exacto (ej. si el segmento habla de "tasas de interés cayendo", el shot debe sugerir descenso/caída/presión, no una imagen genérica intercambiable con cualquier otro segmento)
+- CLARIDAD ANTE TODO: el sujeto de cada shot debe ser CONCRETO, RECONOCIBLE y LEGIBLE a primera vista — nada de composiciones ultra-abstractas o macro-extremo que puedan verse como manchas borrosas sin forma clara. Usa sujetos identificables tratados de forma cinematográfica: racks de servidores con luces, mapas de datos/redes neuronales con nodos y conexiones, skylines financieros nocturnos, gráficos de velas/mercado flotando holográficamente, hélices de ADN como estructura de datos, océano/olas como metáfora de flujo, cosmos/estrellas para escala — shots MEDIOS o AMPLIOS con foco nítido en el sujeto, no extreme close-up que pierda la forma
 - Cada prompt: 40-70 palabras con esta estructura exacta:
-  [SHOT TYPE] + [SUBJECT con detalle específico ligado al contenido del segmento] + [MOVEMENT de cámara] + [LIGHTING] + [MOOD/GRADE]
-- Estética: dark premium tech-finance. Piensa: servidores con luz ámbar, hologramas de datos, ciudades financieras nocturnas, macro de circuitos, tinta en agua, oro líquido, gráficos volumétricos flotando en negro — pero SIEMPRE adaptado al concepto específico del segmento, no genérico
-- PROHIBIDO: personas reconocibles, texto en pantalla, logos, imágenes genéricas de oficina, repetir el mismo sujeto visual en dos segmentos distintos
-- Cada prompt DEBE ser visualmente distinto al anterior (variar shot type: macro, aerial, dolly-in, orbit, slow push)
+  [SHOT TYPE] + [SUBJECT concreto y reconocible, con detalle ligado al contenido del segmento] + [MOVEMENT de cámara] + [LIGHTING] + [MOOD/GRADE]
+- Estética: clean premium tech-finance, nítida y moderna — no oscuro-abstracto-borroso. Piensa: data centers iluminados, hologramas de gráficos de mercado legibles, ciudades financieras de noche con luces definidas, redes de nodos brillantes, superficies de agua o metal con reflejos claros — SIEMPRE con el sujeto principal enfocado y reconocible
+- PROHIBIDO: personas reconocibles, texto en pantalla, logos, imágenes genéricas de oficina, repetir el mismo sujeto visual en dos segmentos distintos, composiciones tan abstractas que no se entienda qué se está mostrando
+- Cada prompt DEBE ser visualmente distinto al anterior (variar shot type: medium shot, aerial, dolly-in, orbit, slow push — evita el macro extremo salvo que el sujeto siga siendo claramente identificable)
 - El prompt 1 (opening) debe ser el más espectacular: es lo que detiene el scroll
 - El ÚLTIMO prompt debe ser un plano de RESOLUCIÓN/CIERRE VISUAL: convergencia, revelación, o un movimiento de cámara (ej. pull-back, reveal) que transmita conclusión — coordinado con el cierre narrativo del último segmento
-- Termina cada prompt con: "cinematic lighting, shallow depth of field, 9:16 vertical, photorealistic, 8k, moody color grade"
+- Termina cada prompt con: "cinematic lighting, sharp focus, well-lit, 9:16 vertical, photorealistic, 8k, clean modern color grade"
 
 EJEMPLO de prompt correcto (para un segmento sobre "el capital rota, no desaparece"):
-"Extreme macro shot of molten gold continuously flowing and rerouting through branching circuit pathways etched in black silicon, camera slowly orbiting to reveal the metal never pooling but always redirecting to new channels, amber light refracting through the liquid metal in motion, cinematic lighting, shallow depth of field, 9:16 vertical, photorealistic, 8k, moody color grade"
+"Medium tracking shot of a glowing financial network map with thousands of light trails flowing between city nodes, camera slowly orbiting to reveal the light constantly rerouting between hubs rather than fading out, amber and blue node connections clearly visible against a dark grid background, cinematic lighting, sharp focus, well-lit, 9:16 vertical, photorealistic, 8k, clean modern color grade"
 
 RESPONDE SOLO con este JSON (sin markdown):
 {
