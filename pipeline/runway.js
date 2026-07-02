@@ -4,16 +4,13 @@ const axios = require("axios");
 async function generateClip(prompt) {
   const apiKey = process.env.REPLICATE_API_KEY;
 
+  // Usar endpoint de modelo (sin version hash) para siempre tener la versión activa
   const { data: pred } = await axios.post(
-    "https://api.replicate.com/v1/predictions",
+    "https://api.replicate.com/v1/models/wavespeedai/wan-2.1-t2v-720p/predictions",
     {
-      version: "f2a791ec34beb7fe730406b9e0ee91c5aad71a0989b2b68668bbed4d028cb67e",
       input: {
         prompt,
-        aspect_ratio:       "9:16",
-        num_frames:         81,
-        sample_steps:       30,
-        sample_guide_scale: 6
+        aspect_ratio: "9:16"
       }
     },
     {
