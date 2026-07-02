@@ -25,20 +25,27 @@ REGLAS DEL GUION (español):
 - Usa **negritas** para 1-3 palabras clave por segmento
 
 REGLAS DE LOS VIDEO PROMPTS (inglés — van a un modelo text-to-video de alta gama):
-- CADA prompt debe representar VISUALMENTE el concepto específico de SU segmento — extrae el sustantivo o metáfora concreta de ese caption exacto (ej. si el segmento habla de "tasas de interés cayendo", el shot debe sugerir descenso/caída/presión, no una imagen genérica intercambiable con cualquier otro segmento)
-- SÓLIDO Y PODEROSO, NUNCA ETÉREO: el sujeto debe tener PESO, MASA, PRESENCIA FÍSICA REAL — metal macizo, concreto, vidrio grueso, estructuras arquitectónicas, maquinaria pesada, superficies con textura tangible. PROHIBIDO: hologramas flotantes, partículas de luz difusas, humo, niebla, brillos translúcidos, cualquier cosa que se vea "flotando" sin gravedad ni sustancia — eso se ve débil y etéreo, lo opuesto al objetivo
-- CLARIDAD Y CONTUNDENCIA: el sujeto de cada shot debe ser CONCRETO, RECONOCIBLE y VISUALMENTE CONTUNDENTE — composiciones de alto impacto, escala imponente, contraste fuerte de luz y sombra. Nada de composiciones ultra-abstractas, macro-extremo borroso, ni imágenes suaves/difuminadas. Usa sujetos con presencia física real: torres de servidores masivas con luces intensas, rascacielos financieros monumentales de noche, estructuras metálicas de redes/circuitos con volumen y sombra, mercados/velas como esculturas 3D sólidas (no proyecciones flotantes), maquinaria industrial de precisión, olas de metal líquido con peso real (no partículas), formaciones geológicas o arquitectónicas a escala cósmica
+- USA UN VOCABULARIO VISUAL CONCRETO Y UNIVERSAL, no inventes metáforas abstractas nuevas por segmento (los modelos de video no las interpretan bien y el resultado sale sin relación con el guion). Para cada segmento, elige el ítem de esta lista que mejor represente su concepto y constrúyele un shot cinematográfico alrededor:
+  * Crecimiento / escala / expansión → cordillera montañosa vista desde el aire, o una ciudad extendiéndose hasta el horizonte
+  * Conexión / redes / relaciones → red de nodos y líneas de luz sólidas conectando una ciudad de noche (vista aérea real, no holograma)
+  * Riesgo / caída / colapso → cascada de agua o rocas cayendo con fuerza, o un edificio/estructura desde un ángulo vertiginoso
+  * Poder / control / concentración → rascacielos financiero monumental visto desde abajo, o una bóveda/cámara acorazada de metal macizo
+  * Datos / tecnología / IA → servidores/data center con luces intensas, o placas de circuitos vistas de cerca pero con forma clara y sólida
+  * Tiempo / ciclos / historia → reloj mecánico de engranajes grandes, o el amanecer/atardecer sobre una ciudad
+  * Océano / flujo / liquidez → olas del mar reales (agua, no metal líquido abstracto), vistas desde un dron
+  * Origen / fundamentos / biología → hélice de ADN como escultura sólida, o raíces de un árbol gigante
+  * Cosmos / incertidumbre / escala infinita → planeta visto desde el espacio, o campo de estrellas con nebulosa
+  * Precisión / ingeniería / maquinaria → maquinaria industrial en movimiento, piezas metálicas engranando con precisión
+- Cada prompt debe LIGAR el ítem elegido al concepto EXACTO de su segmento (no repitas el mismo ítem en dos segmentos)
 - Cada prompt: 40-70 palabras con esta estructura exacta:
-  [SHOT TYPE] + [SUBJECT sólido, contundente y reconocible, con detalle ligado al contenido del segmento] + [MOVEMENT de cámara] + [LIGHTING dramático de alto contraste] + [MOOD/GRADE poderoso]
-- Estética: premium tech-finance de alto impacto — nítida, sólida, imponente. Piensa: monolitos de datos, arquitectura financiera monumental, maquinaria de precisión con peso real, metal y vidrio grueso bajo luz dramática — SIEMPRE con el sujeto principal enfocado, reconocible y con presencia física fuerte
-- PROHIBIDO: personas reconocibles, texto en pantalla, logos, imágenes genéricas de oficina, repetir el mismo sujeto visual en dos segmentos distintos, composiciones tan abstractas que no se entienda qué se está mostrando, cualquier cosa etérea/flotante/difusa
-- Cada prompt DEBE ser visualmente distinto al anterior (variar shot type: medium shot, aerial, dolly-in, orbit, slow push — evita el macro extremo salvo que el sujeto siga siendo claramente identificable)
+  [SHOT TYPE] + [SUBJECT del vocabulario visual, sólido y con presencia física real — nada de hologramas, partículas o niebla] + [MOVEMENT de cámara] + [LIGHTING dramático de alto contraste] + [MOOD/GRADE poderoso]
+- Cada prompt DEBE ser visualmente distinto al anterior (variar shot type: medium shot, aerial, dolly-in, orbit, slow push)
 - El prompt 1 (opening) debe ser el más espectacular e imponente: es lo que detiene el scroll
 - El ÚLTIMO prompt debe ser un plano de RESOLUCIÓN/CIERRE VISUAL: convergencia, revelación, o un movimiento de cámara (ej. pull-back, reveal) que transmita conclusión con fuerza — coordinado con el cierre narrativo del último segmento
 - Termina cada prompt con: "cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade"
 
-EJEMPLO de prompt correcto (para un segmento sobre "el capital rota, no desaparece"):
-"Medium tracking shot of a massive financial data monolith made of dark brushed metal with glowing amber conduits running through its solid structure, camera slowly orbiting to reveal the light physically rerouting through embedded metal channels rather than fading out, strong directional lighting casting deep shadows across the structure's surface, cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade"
+EJEMPLO de prompt correcto (para un segmento sobre "el capital rota hacia nuevos sectores"):
+"Aerial tracking shot of a vast night city skyline with glowing amber light trails flowing continuously between skyscrapers along real streets and rail lines, camera slowly gliding forward to reveal the light network constantly rerouting toward new districts rather than fading, strong directional lighting casting deep shadows between buildings, cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade"
 
 RESPONDE SOLO con este JSON (sin markdown):
 {

@@ -1,9 +1,15 @@
 const axios = require("axios");
 
-// Video AI premium — ByteDance Seedance 1 Lite via Replicate. Calidad muy superior
-// a los modelos de comunidad gratuitos; requiere tarjeta débito/crédito en Replicate
-// (modelo "partner oficial", igual que la voz de Guillermo en MiniMax).
-const VERSION = "6e47dd83529ee0599c68f274f225635080e4fd218360a85e2a3a78396d388b73";
+// Video AI premium — Kling v1.6 Standard via Replicate. Elegido específicamente por
+// su fuerte adherencia al prompt (cfg_scale alto = sigue el texto de forma literal),
+// que era la causa real de que el video no tuviera relación con el guion en modelos
+// anteriores (LTX-video, Seedance-lite). Requiere tarjeta débito/crédito en Replicate.
+const VERSION = "e6f571e8d6990da3c96abf8d3082894024d652822f0ca3cd244acece84a1cc3e";
+const ALLOWED_DURATIONS = [5, 10]; // únicos valores que acepta Kling
+
+function pickDuration(segDurSeconds) {
+  return ALLOWED_DURATIONS.find(d => d >= segDurSeconds) || ALLOWED_DURATIONS[ALLOWED_DURATIONS.length - 1];
+}
 
 async function createPrediction(input, apiKey) {
   const { data } = await axios.post(
@@ -11,7 +17,7 @@ async function createPrediction(input, apiKey) {
     { version: VERSION, input },
     { headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, timeout: 30000 }
   );
-  if (!data.id) throw new Error("Seedance: no prediction id — " + JSON.stringify(data).slice(0, 200));
+  if (!data.id) throw new Error("Kling: no prediction id — " + JSON.stringify(data).slice(0, 200));
   return data.id;
 }
 
@@ -37,14 +43,12 @@ async function waitForPrediction(predId, apiKey, timeoutMs = 600000) {
 
 async function generateClip(prompt, segDurSeconds) {
   const apiKey = process.env.REPLICATE_API_KEY;
-  const duration = Math.min(12, Math.max(4, Math.ceil(segDurSeconds)));
 
   const id = await createPrediction({
     prompt,
-    duration,
-    resolution:    "720p",
-    aspect_ratio:  "9:16",
-    camera_fixed:  false
+    duration:     pickDuration(segDurSeconds),
+    aspect_ratio: "9:16",
+    cfg_scale:    0.8 // alto = mayor fidelidad al prompt, menos libertad creativa
   }, apiKey);
   return await waitForPrediction(id, apiKey);
 }
@@ -66,12 +70,10 @@ async function generateClipWithRetry(prompt, segDurSeconds, maxRetries = 3) {
   }
 }
 
-// segDurSeconds: duración estimada por segmento (audioDuration / N), para que cada
-// clip generado dure al menos lo mismo que su tramo de audio correspondiente.
 async function generateAllClips(prompts, segDurSeconds, onProgress) {
   const urls = [];
   for (let i = 0; i < prompts.length; i++) {
-    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (Seedance)...`);
+    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (Kling)...`);
     urls.push(await generateClipWithRetry(prompts[i], segDurSeconds));
     if (i < prompts.length - 1) await sleep(2000);
   }

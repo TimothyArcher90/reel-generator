@@ -2,7 +2,7 @@ const axios = require("axios");
 
 // Voz de Guillermo clonada en MiniMax (Speech-02 HD) — la única confirmada que suena
 // a él. Requiere tarjeta débito/crédito en Replicate (modelo "partner oficial").
-const GUILLERMO_VOICE_ID = process.env.GUILLERMO_VOICE_ID || "R8_5WN1DFXN";
+const GUILLERMO_VOICE_ID = process.env.GUILLERMO_VOICE_ID || "R8_RGUWJAPB";
 
 async function generateVoiceover(text) {
   const apiKey = process.env.REPLICATE_API_KEY;
