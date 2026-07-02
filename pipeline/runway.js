@@ -1,15 +1,15 @@
 const axios = require("axios");
 
 // Video AI de alta calidad via Replicate — modelo de comunidad (no requiere tarjeta extra)
-const PRIMARY = "fofr/ltx-video";
+const VERSION = "8c47da666861d081eeb4d1261853087de23923a268a69b63febdf5dc1dee08e4";
 
-async function createPrediction(model, input, apiKey) {
+async function createPrediction(input, apiKey) {
   const { data } = await axios.post(
-    `https://api.replicate.com/v1/models/${model}/predictions`,
-    { input },
+    "https://api.replicate.com/v1/predictions",
+    { version: VERSION, input },
     { headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, timeout: 30000 }
   );
-  if (!data.id) throw new Error(model + ": no prediction id — " + JSON.stringify(data).slice(0, 200));
+  if (!data.id) throw new Error("LTX-video: no prediction id — " + JSON.stringify(data).slice(0, 200));
   return data.id;
 }
 
@@ -36,7 +36,7 @@ async function waitForPrediction(predId, apiKey, timeoutMs = 600000) {
 async function generateClip(prompt) {
   const apiKey = process.env.REPLICATE_API_KEY;
 
-  const id = await createPrediction(PRIMARY, {
+  const id = await createPrediction({
     prompt,
     aspect_ratio: "9:16",
     length:       97,   // ~4s a 24fps
