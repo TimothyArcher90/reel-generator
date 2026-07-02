@@ -201,6 +201,26 @@ app.get("/test", async (req, res) => {
     results.replicate_community_model = "ERROR " + (e.response?.status) + " — " + JSON.stringify(e.response?.data)?.slice(0,200);
   }
 
+  // Test candidatos de modelos COMUNIDAD para voz clonada y video (no oficiales, evitan bloqueo de tarjeta)
+  const rpKey = process.env.REPLICATE_API_KEY || "";
+  const candidates = {
+    voice_xtts: "lucataco/xtts-v2",
+    video_wan_zsxkib: "zsxkib/wan2.1",
+    video_wan_fofr: "fofr/wan2.1-with-vace",
+    video_ltx: "fofr/ltx-video"
+  };
+  for (const [key, model] of Object.entries(candidates)) {
+    try {
+      const axios = require("axios");
+      const r = await axios.get(`https://api.replicate.com/v1/models/${model}`, {
+        headers: { Authorization: `Bearer ${rpKey}` }, timeout: 10000
+      });
+      results[key] = r.data.latest_version ? "EXISTS — " + model : "sin version";
+    } catch(e) {
+      results[key] = "ERROR " + (e.response?.status || e.message.slice(0,60)) + " — " + model;
+    }
+  }
+
   res.json(results);
 });
 
