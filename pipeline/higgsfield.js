@@ -73,18 +73,32 @@ async function downloadFile(url, dest) {
   });
 }
 
-async function getAudioDuration(filePath) {
+// Usa ffmpeg directamente (no ffprobe, que puede no existir en el contenedor de
+// Railway y antes caía en un fallback fijo de 38s — cortando el video en seco si
+// la narración real era más larga).
+function resolveFfmpegPath() {
+  const { execSync } = require("child_process");
   try {
-    const { execSync } = require("child_process");
-    const out = execSync(
-      `ffprobe -v quiet -print_format json -show_streams "${filePath}"`,
-      { encoding: "utf8", timeout: 10000 }
-    );
-    const streams = JSON.parse(out).streams;
-    return Math.ceil(parseFloat(streams[0].duration));
+    execSync("ffmpeg -version", { stdio: "ignore" });
+    return "ffmpeg";
   } catch {
-    return 38;
+    return require("ffmpeg-static");
   }
+}
+
+async function getAudioDuration(filePath) {
+  const { spawnSync } = require("child_process");
+  const ffmpegPath = resolveFfmpegPath();
+  const result = spawnSync(ffmpegPath, ["-i", filePath, "-f", "null", "-"], { encoding: "utf8", timeout: 15000 });
+  const stderr = (result.stderr || "") + (result.stdout || "");
+  const match = stderr.match(/Duration:\s*(\d+):(\d+):(\d+\.\d+)/);
+  if (match) {
+    const [, hh, mm, ss] = match;
+    const seconds = (+hh) * 3600 + (+mm) * 60 + parseFloat(ss);
+    if (seconds > 0) return Math.ceil(seconds);
+  }
+  console.log("getAudioDuration: no se pudo leer duración real, usando fallback 38s — REVISAR", stderr.slice(-300));
+  return 38;
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
