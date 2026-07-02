@@ -13,8 +13,8 @@ async function generateVoiceover(text) {
     {
       version: "e876df565d4d629da440ce5820d1d2c8c2adb963f52e526efc064911f841f85e",
       input: {
-        text,
-        speaker:       VOICE_URL,
+        text:          text.slice(0, 2000), // XTTS-v2 tiene límite de longitud
+        speaker_wav:   VOICE_URL,
         language:      "es",
         cleanup_voice: false
       }
