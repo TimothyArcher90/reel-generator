@@ -1,59 +1,64 @@
 const axios = require("axios");
-const fs    = require("fs");
-const path  = require("path");
 
-// Pexels free stock video — 200 requests/hour, no billing required
-// Portrait/9:16 clips for vertical reel format
+// WAN 2.1 text-to-video via Replicate — alta calidad cinematográfica 9:16
+async function generateClip(prompt) {
+  const apiKey = process.env.REPLICATE_API_KEY;
 
-async function searchPexelsVideo(query) {
-  const key = process.env.PEXELS_API_KEY;
-  if (!key) throw new Error("PEXELS_API_KEY no configurada");
+  const { data: pred } = await axios.post(
+    "https://api.replicate.com/v1/predictions",
+    {
+      version: "f2a791ec34beb7fe730406b9e0ee91c5aad71a0989b2b68668bbed4d028cb67e",
+      input: {
+        prompt,
+        aspect_ratio:       "9:16",
+        num_frames:         81,
+        sample_steps:       30,
+        sample_guide_scale: 6
+      }
+    },
+    {
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      timeout: 30000
+    }
+  );
 
-  const { data } = await axios.get("https://api.pexels.com/videos/search", {
-    headers: { Authorization: key },
-    params: { query, orientation: "portrait", per_page: 3, size: "medium" },
-    timeout: 15000
-  });
-
-  if (!data.videos || data.videos.length === 0) {
-    // Fallback: búsqueda genérica si no hay resultados
-    const { data: fallback } = await axios.get("https://api.pexels.com/videos/search", {
-      headers: { Authorization: key },
-      params: { query: "business cinematic", orientation: "portrait", per_page: 3 },
-      timeout: 15000
-    });
-    if (!fallback.videos || fallback.videos.length === 0) throw new Error("Pexels: no hay videos para: " + query);
-    return getBestVideoFile(fallback.videos[0]);
-  }
-  return getBestVideoFile(data.videos[0]);
+  const predId = pred.id;
+  if (!predId) throw new Error("WAN 2.1: no prediction id — " + JSON.stringify(pred).slice(0, 200));
+  return await waitForPrediction(predId, apiKey);
 }
 
-function getBestVideoFile(video) {
-  // Preferir HD portrait, si no la más alta disponible
-  const files = video.video_files || [];
-  const portrait = files.filter(f => f.width < f.height);
-  const sorted = (portrait.length ? portrait : files).sort((a, b) => b.width - a.width);
-  if (!sorted.length) throw new Error("Pexels: video sin archivos descargables");
-  return sorted[0].link;
+async function waitForPrediction(predId, apiKey, timeoutMs = 600000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await sleep(6000);
+    const { data } = await axios.get(
+      `https://api.replicate.com/v1/predictions/${predId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` }, timeout: 15000 }
+    );
+    if (data.status === "succeeded") {
+      const url = Array.isArray(data.output) ? data.output[0] : data.output;
+      if (!url) throw new Error("WAN 2.1: succeeded pero sin output");
+      return url;
+    }
+    if (data.status === "failed") {
+      throw new Error("WAN 2.1 falló: " + (data.error || JSON.stringify(data).slice(0, 200)));
+    }
+  }
+  throw new Error("WAN 2.1 timeout");
 }
 
 async function generateAllClips(prompts, onProgress) {
-  const urls = [];
-  for (let i = 0; i < prompts.length; i++) {
-    onProgress(`Buscando clip ${i + 1}/${prompts.length}...`);
-    // Extraer palabras clave del prompt para la búsqueda
-    const keywords = extractKeywords(prompts[i]);
-    const url = await searchPexelsVideo(keywords);
-    urls.push(url);
+  const urls  = [];
+  const batch = 2;
+  for (let i = 0; i < prompts.length; i += batch) {
+    const slice = prompts.slice(i, i + batch);
+    onProgress(`Generando clips ${i + 1}-${Math.min(i + batch, prompts.length)} de ${prompts.length}...`);
+    const batchUrls = await Promise.all(slice.map(p => generateClip(p)));
+    urls.push(...batchUrls);
   }
   return urls;
 }
 
-function extractKeywords(prompt) {
-  // Tomar las primeras 3-4 palabras descriptivas del prompt
-  const stopWords = new Set(["a", "an", "the", "with", "and", "of", "in", "on", "at", "for", "to", "is", "are", "shot", "cinematic", "dramatic", "close-up", "wide", "aerial"]);
-  const words = prompt.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(" ").filter(w => w.length > 3 && !stopWords.has(w));
-  return words.slice(0, 3).join(" ") || "business professional";
-}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 module.exports = { generateAllClips };
