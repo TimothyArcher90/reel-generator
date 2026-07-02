@@ -48,15 +48,31 @@ async function waitForPrediction(predId, apiKey, timeoutMs = 600000) {
 }
 
 async function generateAllClips(prompts, onProgress) {
-  const urls  = [];
-  const batch = 2;
-  for (let i = 0; i < prompts.length; i += batch) {
-    const slice = prompts.slice(i, i + batch);
-    onProgress(`Generando clips ${i + 1}-${Math.min(i + batch, prompts.length)} de ${prompts.length}...`);
-    const batchUrls = await Promise.all(slice.map(p => generateClip(p)));
-    urls.push(...batchUrls);
+  const urls = [];
+  for (let i = 0; i < prompts.length; i++) {
+    onProgress(`Generando clip ${i + 1} de ${prompts.length}...`);
+    const url = await generateClipWithRetry(prompts[i]);
+    urls.push(url);
+    if (i < prompts.length - 1) await sleep(3000); // pausa entre clips
   }
   return urls;
+}
+
+async function generateClipWithRetry(prompt, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await generateClip(prompt);
+    } catch (e) {
+      const is429 = e.response?.status === 429 || (e.message && e.message.includes("429"));
+      if (is429 && attempt < maxRetries) {
+        const wait = attempt * 15000; // 15s, 30s
+        console.log(`Rate limit 429 — esperando ${wait/1000}s antes de reintentar...`);
+        await sleep(wait);
+      } else {
+        throw e;
+      }
+    }
+  }
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
