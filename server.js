@@ -190,4 +190,14 @@ app.get("/test", async (req, res) => {
   res.json(results);
 });
 
+// ── GET /test-voice ── prueba barata (~$0.01) de la voz de Guillermo ────────
+app.get("/test-voice", async (req, res) => {
+  try {
+    const url = await generateVoiceover("Hola, soy Guillermo. Esta es una prueba de mi voz clonada para los reels.");
+    res.json({ ok: true, audio: url, nota: "Abre el link 'audio' para escuchar la voz clonada" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: (e.response?.data?.detail) || e.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`Reel Generator → http://localhost:${PORT}`));
