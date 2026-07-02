@@ -66,12 +66,16 @@ async function generateClipWithRetry(prompt, segDurSeconds, maxRetries = 3) {
   }
 }
 
+// Genera en lotes de 3 en paralelo — reduce el tiempo total de ~25-30min a ~8-12min.
+// Si un clip da 429 (rate limit), generateClipWithRetry ya reintenta con backoff.
 async function generateAllClips(prompts, segDurSeconds, onProgress) {
+  const BATCH = 3;
   const urls = [];
-  for (let i = 0; i < prompts.length; i++) {
-    onProgress(`Generando clip AI ${i + 1} de ${prompts.length} (Seedance Pro)...`);
-    urls.push(await generateClipWithRetry(prompts[i], segDurSeconds));
-    if (i < prompts.length - 1) await sleep(2000);
+  for (let i = 0; i < prompts.length; i += BATCH) {
+    const slice = prompts.slice(i, i + BATCH);
+    onProgress(`Generando clips ${i + 1}-${Math.min(i + BATCH, prompts.length)} de ${prompts.length} (Seedance Pro, en paralelo)...`);
+    const batchUrls = await Promise.all(slice.map(p => generateClipWithRetry(p, segDurSeconds)));
+    urls.push(...batchUrls);
   }
   return urls;
 }
