@@ -2,7 +2,7 @@ const { spawn, execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-// Preferir ffmpeg del sistema (nixpacks, trae drawtext); fallback a ffmpeg-static
+// Preferir ffmpeg del sistema (nixpacks); fallback a ffmpeg-static
 let ffmpegPath;
 try {
   execSync("ffmpeg -version", { stdio: "ignore" });
@@ -10,7 +10,14 @@ try {
 } catch {
   ffmpegPath = require("ffmpeg-static");
 }
-console.log("ffmpeg en uso:", ffmpegPath);
+
+// Verificar soporte real de drawtext (requiere libfreetype) — si no está, seguimos sin captions
+let HAS_DRAWTEXT = false;
+try {
+  const filters = execSync(`"${ffmpegPath}" -filters`, { encoding: "utf8", timeout: 10000 });
+  HAS_DRAWTEXT = /drawtext/.test(filters);
+} catch { HAS_DRAWTEXT = false; }
+console.log("ffmpeg en uso:", ffmpegPath, "| drawtext:", HAS_DRAWTEXT);
 
 const FONT = path.resolve(__dirname, "..", "fonts", "bold.ttf").replace(/\\/g, "/");
 
@@ -70,12 +77,14 @@ async function renderVideo({ clips, audioFile, captions, duration, outPath }) {
     let vf = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=30,format=yuv420p`;
     // Fade in y out por clip = transición profesional entre segmentos
     vf += `,fade=t=in:st=0:d=${fade},fade=t=out:st=${(segDur - fade).toFixed(2)}:d=${fade}`;
-    // Captions centrados abajo, caja semitransparente, 1-2 líneas
-    const baseY = lines.length === 2 ? "h*0.70" : "h*0.73";
-    lines.forEach((line, li) => {
-      const y = `${baseY}+${li}*64`;
-      vf += `,drawtext=fontfile='${FONT}':text='${line}':fontsize=44:fontcolor=white:borderw=3:bordercolor=black@0.85:x=(w-text_w)/2:y=${y}`;
-    });
+    // Captions centrados abajo, caja semitransparente, 1-2 líneas (solo si ffmpeg soporta drawtext)
+    if (HAS_DRAWTEXT) {
+      const baseY = lines.length === 2 ? "h*0.70" : "h*0.73";
+      lines.forEach((line, li) => {
+        const y = `${baseY}+${li}*64`;
+        vf += `,drawtext=fontfile='${FONT}':text='${line}':fontsize=44:fontcolor=white:borderw=3:bordercolor=black@0.85:x=(w-text_w)/2:y=${y}`;
+      });
+    }
 
     await run([
       "-y", "-i", clips[i],
