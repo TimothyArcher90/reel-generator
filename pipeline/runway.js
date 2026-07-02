@@ -54,6 +54,8 @@ async function generateClipWithRetry(prompt, segDurSeconds, maxRetries = 5) {
     try {
       return await generateClip(prompt, segDurSeconds);
     } catch (e) {
+      // 402 = sin crédito. Nunca se arregla reintentando — falla ya, sin perder minutos.
+      if (e.response?.status === 402) throw e;
       const is429 = e.response?.status === 429 || (e.message && e.message.includes("429"));
       if (attempt >= maxRetries) throw e;
       const jitter = Math.random() * 3000;
