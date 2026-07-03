@@ -136,17 +136,23 @@ function friendlyError(err) {
   const raw = (err && err.message) ? err.message : String(err);
   const status = err?.response?.status;
   const body = JSON.stringify(err?.response?.data || "").toLowerCase();
+  const url = String(err?.config?.url || "");
+  const isElevenLabs = url.includes("elevenlabs.io");
+  const isReplicate = url.includes("replicate.com");
 
   if (raw.includes("SIN CRÉDITO en Higgsfield")) return raw;
   if (raw.includes("ELEVENLABS_API_KEY") || raw.includes("ELEVENLABS_VOICE_ID")) return raw;
-  if (status === 401 && body.includes("elevenlabs")) {
-    return "CLAVE DE ELEVENLABS INVÁLIDA o sin créditos — revisar ELEVENLABS_API_KEY en Railway y el plan en elevenlabs.io.";
+  if (isElevenLabs && (status === 401 || status === 402 || body.includes("quota") || body.includes("credit"))) {
+    return `CLAVE/CRÉDITO DE ELEVENLABS INVÁLIDO (HTTP ${status}) — revisar ELEVENLABS_API_KEY/ELEVENLABS_VOICE_ID en Railway y el plan/créditos en elevenlabs.io. Detalle: ${body.slice(0, 200)}`;
   }
-  if (status === 402 || body.includes("insufficient credit")) {
+  if (isReplicate && status === 402) {
     return "SIN CRÉDITO en Replicate (voz) — recargar en replicate.com/account/billing y reintentar en unos minutos.";
   }
+  if (status === 402 || body.includes("insufficient credit")) {
+    return `SIN CRÉDITO (HTTP 402) en ${url || "proveedor desconocido"} — revisar billing del servicio correspondiente. Detalle: ${body.slice(0, 200)}`;
+  }
   if (status === 401 || body.includes("unauthenticated") || body.includes("invalid api key")) {
-    return "CLAVE API INVÁLIDA — revisar las variables de API en Railway (HF_CLOUD_KEY/SECRET o REPLICATE_API_KEY).";
+    return `CLAVE API INVÁLIDA en ${url || "proveedor desconocido"} — revisar las variables de API en Railway. Detalle: ${body.slice(0, 200)}`;
   }
   if (status === 429) {
     return "LÍMITE DE VELOCIDAD del proveedor — esperar 2-3 minutos y volver a intentar.";
