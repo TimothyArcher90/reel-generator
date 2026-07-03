@@ -4,7 +4,11 @@ const path    = require("path");
 const fs      = require("fs");
 
 const { generateScript }    = require("./pipeline/generateScript");
-const { generateVoiceover } = require("./pipeline/edgetts");
+const edgeTts      = require("./pipeline/edgetts");
+const elevenLabs   = require("./pipeline/elevenlabs");
+// Usa la voz clonada de Guillermo (ElevenLabs) si está configurada; si no, cae a Edge-TTS gratis.
+const useElevenLabs = !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID);
+const { generateVoiceover } = useElevenLabs ? elevenLabs : edgeTts;
 const { generateAllClips }  = require("./pipeline/higgsfieldCloud");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 const { renderVideo }       = require("./pipeline/renderVideo");
@@ -72,9 +76,9 @@ async function runPipeline(jobId, text, baseFilename) {
   const N = script.captions.length;
   log(jobId, `Guion listo: "${script.title}" — ${N} segmentos`);
 
-  // Step 2 — Voz (Edge-TTS, gratis y sin billing — escribe directo al archivo)
+  // Step 2 — Voz (ElevenLabs con voz clonada de Guillermo si está configurada; si no, Edge-TTS gratis)
   upd(jobId, { step: 2, statusMsg: "Generando voz..." });
-  log(jobId, "[2/4] Generando voz...");
+  log(jobId, `[2/4] Generando voz (${useElevenLabs ? "ElevenLabs — Guillermo" : "Edge-TTS gratis"})...`);
   const audioFile = path.join(workDir, "audio.mp3");
   await withTimeout(generateVoiceover(script.voiceover, audioFile), 120000, "Voiceover timeout");
   const duration = await getAudioDuration(audioFile);
@@ -134,6 +138,10 @@ function friendlyError(err) {
   const body = JSON.stringify(err?.response?.data || "").toLowerCase();
 
   if (raw.includes("SIN CRÉDITO en Higgsfield")) return raw;
+  if (raw.includes("ELEVENLABS_API_KEY") || raw.includes("ELEVENLABS_VOICE_ID")) return raw;
+  if (status === 401 && body.includes("elevenlabs")) {
+    return "CLAVE DE ELEVENLABS INVÁLIDA o sin créditos — revisar ELEVENLABS_API_KEY en Railway y el plan en elevenlabs.io.";
+  }
   if (status === 402 || body.includes("insufficient credit")) {
     return "SIN CRÉDITO en Replicate (voz) — recargar en replicate.com/account/billing y reintentar en unos minutos.";
   }
@@ -216,12 +224,17 @@ app.get("/test", async (req, res) => {
   res.json(results);
 });
 
-// ── GET /test-voice ── prueba gratis de la voz Edge-TTS ─────────────────────
+// ── GET /test-voice ── prueba de la voz activa (ElevenLabs/Guillermo o Edge-TTS) ──
 app.get("/test-voice", async (req, res) => {
   try {
     const out = path.join("outputs", "test-voice.mp3");
     await generateVoiceover("Hola, esta es una prueba de la voz para los reels del equipo.", out);
-    res.json({ ok: true, audio: "/download/test-voice.mp3", nota: "Abre el link 'audio' para escuchar la voz" });
+    res.json({
+      ok: true,
+      voice: useElevenLabs ? "ElevenLabs (Guillermo)" : "Edge-TTS (gratis, genérica)",
+      audio: "/download/test-voice.mp3",
+      nota: "Abre el link 'audio' para escuchar la voz"
+    });
   } catch (e) {
     res.status(500).json({ ok: false, error: friendlyError(e) });
   }
