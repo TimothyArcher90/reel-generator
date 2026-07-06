@@ -9,10 +9,11 @@ const elevenLabs   = require("./pipeline/elevenlabs");
 const { generateAllClips, generateVoiceoverHiggsfield, GUILLERMO_VOICE_ID } = require("./pipeline/higgsfieldCloud");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 
-// Prioridad de voz: Higgsfield (Guillermo, mismo Key/Secret que video, sin costo extra
-// de proveedor) > ElevenLabs (Guillermo, requiere saldo aparte en elevenlabs.io/app/subscription/api)
-// > Edge-TTS gratis (voz genérica, fallback final).
-const useHiggsfieldVoice = !!(process.env.HF_CLOUD_KEY && process.env.HF_CLOUD_SECRET);
+// Higgsfield Cloud API NO tiene modelo de texto-a-voz disponible en este plan/cuenta
+// (confirmado 2026-07-06: no aparece en el catálogo de /dashboard, todos los intentos
+// contra text2speech_v2 dan 404). Queda solo como endpoint de diagnóstico manual
+// (GET /test-voice-higgsfield) hasta que Higgsfield lo habilite — NO se usa en el pipeline.
+const useHiggsfieldVoice = false;
 const useElevenLabs = !useHiggsfieldVoice && !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID);
 const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : "Edge-TTS (gratis, genérica)";
 
