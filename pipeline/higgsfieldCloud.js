@@ -123,12 +123,11 @@ async function withRetry(fn, label, maxRetries = 2) {
 
 // prompts: array de { image, motion } — o strings (se usa el mismo texto para ambos pasos)
 // Antes generaba los clips en fila (1 a la vez) — 10 clips a ~2-4 min c/u eran 30-40
-// minutos. Ahora corre varios EN PARALELO — mismo costo por clip, tiempo total baja.
-// CONCURRENCY=3 falló en producción: Higgsfield Cloud API responde 400
-// "Maximum number of concurrent requests (4) has been reached" — con 3 clips en
-// paralelo, un reintento superpuesto de un clip lento ya empuja el total a 4+.
-// Bajado a 2 para quedar con margen seguro bajo ese límite.
-const CONCURRENCY = 2;
+// minutos. Límite real de Higgsfield: 4 peticiones concurrentes (confirmado por un
+// error 400 en producción con CONCURRENCY=3 en lotes fijos). CONCURRENCY=3 aquí es
+// seguro porque ahora es una ventana continua (no lotes que esperan al más lento):
+// en cualquier momento hay como máximo 3 clips en vuelo, dejando 1 de margen.
+const CONCURRENCY = 3;
 
 // Si DoP (animar la imagen) falla incluso después de reintentar, usar la IMAGEN FIJA
 // como ese segmento en vez de perder el reel completo — ya se pagó por la imagen y
@@ -152,15 +151,23 @@ async function generateOneClip(p, i, total, segDurSeconds, onProgress) {
   }
 }
 
+// Cola continua en vez de lotes fijos: antes, si un clip del par tardaba más que su
+// compañero, el más rápido se quedaba esperando sin hacer nada hasta que el lento
+// terminara. Ahora, apenas se libera un cupo, arranca el siguiente clip pendiente de
+// inmediato — sin esperar a nadie más. Mismo límite de concurrencia, mejor uso del tiempo.
 async function generateAllClips(prompts, segDurSeconds, onProgress) {
   const urls = new Array(prompts.length);
-  for (let start = 0; start < prompts.length; start += CONCURRENCY) {
-    const batch = prompts.slice(start, start + CONCURRENCY);
-    const results = await Promise.all(
-      batch.map((p, j) => generateOneClip(p, start + j, prompts.length, segDurSeconds, onProgress))
-    );
-    results.forEach((url, j) => { urls[start + j] = url; });
+  let next = 0;
+
+  async function worker() {
+    while (next < prompts.length) {
+      const i = next++;
+      urls[i] = await generateOneClip(prompts[i], i, prompts.length, segDurSeconds, onProgress);
+    }
   }
+
+  const workers = Array.from({ length: Math.min(CONCURRENCY, prompts.length) }, () => worker());
+  await Promise.all(workers);
   return urls;
 }
 
