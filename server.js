@@ -291,8 +291,25 @@ app.get("/test-voice-higgsfield", async (req, res) => {
 app.get("/test-image", async (req, res) => {
   try {
     const { generateImage } = require("./pipeline/higgsfieldCloud");
-    const url = await generateImage("Low-angle shot of a glass and steel financial skyscraper photographed from the base looking up, lit by a single strong light source from the left casting hard shadows, cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people");
+    const url = await generateImage("Low-angle shot of a glass and steel financial skyscraper photographed from the base looking up, lit by a single strong light source from the left casting hard shadows, cinematic lighting, high contrast black-and-white base with a single warm gold/amber accent light source, dark editorial financial-terminal aesthetic, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, no text, no logos, no floating particles, no fog, no people");
     res.json({ ok: true, image: url, nota: "Si ves la imagen, las claves de Higgsfield Cloud funcionan" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
+});
+
+// ── GET /test-clip ── prueba barata de UN clip completo (imagen Soul + animación
+// DoP) para verificar calidad de video real antes de arriesgar un reel completo ──
+app.get("/test-clip", async (req, res) => {
+  try {
+    const { generateImage, generateClipFromImage } = require("./pipeline/higgsfieldCloud");
+    const imagePrompt = "Low-angle shot of a glass and steel financial skyscraper photographed from the base looking up, lit by a single strong light source from the left casting hard shadows, cinematic lighting, high contrast black-and-white base with a single warm gold/amber accent light source, dark editorial financial-terminal aesthetic, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, no text, no logos, no floating particles, no fog, no people";
+    const motionPrompt = "camera tilts up along the subject, amber light glints across the glass facade";
+    const imageUrl = await generateImage(imagePrompt);
+    const videoUrl = await generateClipFromImage(imageUrl, motionPrompt, 5);
+    const out = path.join("outputs", "test-clip.mp4");
+    await downloadFile(videoUrl, out);
+    res.json({ ok: true, image: imageUrl, video: "/download/test-clip.mp4", nota: "Este es un clip real con la línea gráfica y animación final" });
   } catch (e) {
     res.status(500).json({ ok: false, error: friendlyError(e) });
   }
