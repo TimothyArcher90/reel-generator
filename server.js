@@ -68,6 +68,27 @@ app.post("/start", (req, res) => {
   });
 });
 
+// ── GET /debug/jobs ── lista qué quedó guardado en disco de intentos anteriores,
+// para poder recuperar clips ya pagados en vez de regenerarlos ──────────────
+app.get("/debug/jobs", (req, res) => {
+  try {
+    const dirs = fs.readdirSync("outputs", { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => {
+        const jobDir = path.join("outputs", d.name);
+        const files = fs.readdirSync(jobDir).map(f => {
+          const st = fs.statSync(path.join(jobDir, f));
+          return { name: f, sizeKB: Math.round(st.size / 1024), mtime: st.mtime };
+        });
+        return { jobId: d.name, files };
+      })
+      .sort((a, b) => (b.files[0]?.mtime > a.files[0]?.mtime ? 1 : -1));
+    res.json({ ok: true, jobs: dirs });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
 // ── GET /status/:jobId ────────────────────────────────────────────────────
 app.get("/status/:jobId", (req, res) => {
   const j = jobs.get(req.params.jobId);
