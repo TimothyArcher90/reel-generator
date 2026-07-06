@@ -60,8 +60,9 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
   //  - eq: contraste y saturación ligeramente elevados
   const brandGrade = "colorbalance=rm=0.05:gm=0.01:bm=-0.07:rh=0.04:bh=-0.05:rs=0.02:bs=-0.03," +
     "eq=contrast=1.08:saturation=1.06,vignette=PI/4,noise=alls=5:allf=t+u";
-  // Glitch de aberración cromática, alternado en clips impares para variar el ritmo visual
-  const glitchFor = i => (i % 3 === 1 ? ",rgbashift=rh=2:bh=-2" : "");
+  // Glitch de aberración cromática: retirado a pedido — riesgo de verse "barato/gimmick"
+  // en vez de profesional. Se deja solo el look de marca (color, viñeta, grano).
+  const glitchFor = () => "";
 
   // 1. Procesar cada clip a una duración UNIFORME real de segDur — antes se asumía
   //    ciegamente que cada clip de Higgsfield medía exactamente segDur, pero a veces
