@@ -90,6 +90,14 @@ function isCreditError(e) {
   return s === 402 || body.includes("credit") || body.includes("insufficient") || body.includes("balance");
 }
 
+// "Maximum number of concurrent requests" (400 de Higgsfield): no es un error real
+// de la petición, es un límite de tasa temporal — hay que esperar más que el resto
+// de reintentos (los otros clips en vuelo necesitan tiempo para liberar su cupo).
+function isConcurrencyError(e) {
+  const body = JSON.stringify(e.response?.data || "").toLowerCase();
+  return body.includes("concurrent request");
+}
+
 // maxRetries bajado de 3 a 2: con el timeout ya recortado a 4 min, 3 intentos
 // seguía significando hasta ~12 min pegado en un solo clip antes de fallar.
 async function withRetry(fn, label, maxRetries = 2) {
@@ -99,6 +107,10 @@ async function withRetry(fn, label, maxRetries = 2) {
     } catch (e) {
       if (isCreditError(e)) {
         throw new Error("SIN CRÉDITO en Higgsfield Cloud — recargar en cloud.higgsfield.ai (" + label + ")");
+      }
+      if (isConcurrencyError(e) && attempt < maxRetries) {
+        await sleep(15000 + Math.random() * 5000);
+        continue;
       }
       // Errores de parseo (respuesta ya cobrada y completada, pero con forma no reconocida)
       // son deterministas: reintentar solo vuelve a cobrar el mismo clip sin arreglar nada.
@@ -111,10 +123,12 @@ async function withRetry(fn, label, maxRetries = 2) {
 
 // prompts: array de { image, motion } — o strings (se usa el mismo texto para ambos pasos)
 // Antes generaba los clips en fila (1 a la vez) — 10 clips a ~2-4 min c/u eran 30-40
-// minutos. Ahora corre varios EN PARALELO (lotes de 3) — mismo costo por clip, pero
-// el tiempo total baja a ~1/3, porque el cuello de botella era esperar en fila, no
-// el costo ni la cantidad de llamadas.
-const CONCURRENCY = 3;
+// minutos. Ahora corre varios EN PARALELO — mismo costo por clip, tiempo total baja.
+// CONCURRENCY=3 falló en producción: Higgsfield Cloud API responde 400
+// "Maximum number of concurrent requests (4) has been reached" — con 3 clips en
+// paralelo, un reintento superpuesto de un clip lento ya empuja el total a 4+.
+// Bajado a 2 para quedar con margen seguro bajo ese límite.
+const CONCURRENCY = 2;
 
 async function generateOneClip(p, i, total, segDurSeconds, onProgress) {
   const imagePrompt  = typeof p === "string" ? p : p.image;
