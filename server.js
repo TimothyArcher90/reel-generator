@@ -116,10 +116,12 @@ async function runPipeline(jobId, text, baseFilename) {
   );
   const clipFiles = [];
   for (let i = 0; i < clipUrls.length; i++) {
-    const dest = path.join(workDir, `clip${i + 1}.mp4`);
-    await downloadFile(clipUrls[i], dest);
-    clipFiles.push(dest);
-    log(jobId, `Clip ${i + 1}/${N} descargado`);
+    const clip = clipUrls[i];
+    const isImage = clip.type === "image";
+    const dest = path.join(workDir, `clip${i + 1}${isImage ? ".jpg" : ".mp4"}`);
+    await downloadFile(clip.url, dest);
+    clipFiles.push({ path: dest, type: clip.type });
+    log(jobId, `Clip ${i + 1}/${N} descargado${isImage ? " (imagen fija, DoP falló)" : ""}`);
     upd(jobId, { statusMsg: `Descargando clips... ${i + 1}/${N}` });
   }
 

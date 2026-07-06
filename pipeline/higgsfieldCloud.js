@@ -130,6 +130,10 @@ async function withRetry(fn, label, maxRetries = 2) {
 // Bajado a 2 para quedar con margen seguro bajo ese límite.
 const CONCURRENCY = 2;
 
+// Si DoP (animar la imagen) falla incluso después de reintentar, usar la IMAGEN FIJA
+// como ese segmento en vez de perder el reel completo — ya se pagó por la imagen y
+// por los demás clips; renderVideo.js sabe convertir una imagen fija en un clip con
+// zoom Ken Burns, así que el reel siempre se completa con lo que ya se generó.
 async function generateOneClip(p, i, total, segDurSeconds, onProgress) {
   const imagePrompt  = typeof p === "string" ? p : p.image;
   const motionPrompt = typeof p === "string" ? "slow cinematic camera movement" : p.motion;
@@ -138,10 +142,14 @@ async function generateOneClip(p, i, total, segDurSeconds, onProgress) {
   const imageUrl = await withRetry(() => generateImage(imagePrompt), `imagen ${i + 1}`);
 
   onProgress(`Clip ${i + 1}/${total}: animando con DoP...`);
-  const videoUrl = await withRetry(() => generateClipFromImage(imageUrl, motionPrompt, segDurSeconds), `video ${i + 1}`);
-
-  onProgress(`Clip ${i + 1}/${total}: listo`);
-  return videoUrl;
+  try {
+    const videoUrl = await withRetry(() => generateClipFromImage(imageUrl, motionPrompt, segDurSeconds), `video ${i + 1}`);
+    onProgress(`Clip ${i + 1}/${total}: listo`);
+    return { type: "video", url: videoUrl };
+  } catch (e) {
+    onProgress(`Clip ${i + 1}/${total}: DoP falló (${e.message.slice(0, 80)}) — usando imagen fija con zoom en su lugar`);
+    return { type: "image", url: imageUrl };
+  }
 }
 
 async function generateAllClips(prompts, segDurSeconds, onProgress) {

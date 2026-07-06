@@ -37,10 +37,12 @@ function probeDuration(filePath) {
   return (+hh) * 3600 + (+mm) * 60 + parseFloat(ss);
 }
 
+// clips: array de { path, type } — type "video" (clip animado DoP) o "image"
+// (fallback cuando DoP falló tras reintentar: se usa la imagen fija con zoom).
 async function renderVideo({ clips, audioFile, duration, outPath }) {
   const N = clips.length;
   const segDur = Math.max(3, duration / N);
-  const workDir = path.dirname(clips[0]);
+  const workDir = path.dirname(clips[0].path);
   const w = 720, h = 1280;
   const tailAfterVoice = 4;   // segundos de video que siguen después de terminar la narración
 
@@ -75,8 +77,8 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
   const parts = [];
   for (let i = 0; i < N; i++) {
     const part = path.join(workDir, `part${i}.mp4`);
-    const realDur = probeDuration(clips[i]);
-    if (!realDur) throw new Error(`Clip ${i + 1}: no se pudo leer su duración real (archivo posiblemente corrupto)`);
+    const clip = clips[i];
+    const isImage = clip.type === "image";
 
     const zoomFrames = Math.round(segDur * 30);
     // El hook (primer segmento) lleva un zoom-in más marcado y rápido para que el
@@ -86,14 +88,24 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
     const vf = `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},` +
       `zoompan=z='${zoomDir}':d=${zoomFrames}:s=${w}x${h}:fps=30,setsar=1,${brandGrade}${glitchFor(i)},format=yuv420p`;
 
-    const args = ["-y", "-i", clips[i]];
-    if (realDur < segDur - 0.1) {
-      // clip más corto que segDur: congelar último frame hasta completar
-      args.push("-vf", `${vf},tpad=stop_mode=clone:stop_duration=${(segDur - realDur).toFixed(2)}`);
+    let args;
+    if (isImage) {
+      // Imagen fija (DoP falló) — "-loop 1" la convierte en un video de la duración
+      // exacta que pidamos; el zoom Ken Burns hace que no se sienta estática.
+      args = ["-y", "-loop", "1", "-i", clip.path, "-t", segDur.toFixed(2), "-vf", vf,
+        "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", part];
     } else {
-      args.push("-t", segDur.toFixed(2), "-vf", vf);
+      const realDur = probeDuration(clip.path);
+      if (!realDur) throw new Error(`Clip ${i + 1}: no se pudo leer su duración real (archivo posiblemente corrupto)`);
+      args = ["-y", "-i", clip.path];
+      if (realDur < segDur - 0.1) {
+        // clip más corto que segDur: congelar último frame hasta completar
+        args.push("-vf", `${vf},tpad=stop_mode=clone:stop_duration=${(segDur - realDur).toFixed(2)}`);
+      } else {
+        args.push("-t", segDur.toFixed(2), "-vf", vf);
+      }
+      args.push("-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", part);
     }
-    args.push("-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", part);
 
     await run(args, `clip ${i + 1}`);
     const partDur = probeDuration(part);
