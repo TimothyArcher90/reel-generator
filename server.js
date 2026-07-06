@@ -178,6 +178,11 @@ function friendlyError(err) {
   if (raw.includes("timeout") || raw.includes("Timeout")) {
     return "TIEMPO AGOTADO en un paso (" + raw + ") — volver a intentar; si se repite, avisar al administrador.";
   }
+  // Cualquier otro error HTTP (ej. 400) sin caso específico: mostrar el detalle real
+  // del proveedor en vez de solo "Request failed with status code X" a secas.
+  if (status) {
+    return `ERROR HTTP ${status} en ${url || "proveedor desconocido"} — Detalle: ${JSON.stringify(err?.response?.data || "").slice(0, 400)}`;
+  }
   return raw;
 }
 
