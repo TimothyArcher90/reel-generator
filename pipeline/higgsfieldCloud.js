@@ -5,7 +5,7 @@ const axios = require("axios");
 // Es el mismo motor con el que se hizo el reel de referencia de Spinoza.
 const BASE = "https://platform.higgsfield.ai";
 const IMAGE_MODEL = "higgsfield-ai/soul/standard";
-const VIDEO_MODEL = "higgsfield-ai/dop/preview";
+const VIDEO_MODEL = "higgsfield-ai/dop/standard";
 // Confirmado vía models_explore (MCP de Higgsfield): id real "text2speech_v2",
 // requiere variant (motor), voice_type, voice_id. Ruta REST aún no confirmada
 // contra la API real — verificar con GET /test-voice-higgsfield antes de un reel real.
