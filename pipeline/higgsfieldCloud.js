@@ -105,21 +105,34 @@ async function withRetry(fn, label, maxRetries = 3) {
 }
 
 // prompts: array de { image, motion } — o strings (se usa el mismo texto para ambos pasos)
+// Antes generaba los clips en fila (1 a la vez) — 10 clips a ~2-4 min c/u eran 30-40
+// minutos. Ahora corre varios EN PARALELO (lotes de 3) — mismo costo por clip, pero
+// el tiempo total baja a ~1/3, porque el cuello de botella era esperar en fila, no
+// el costo ni la cantidad de llamadas.
+const CONCURRENCY = 3;
+
+async function generateOneClip(p, i, total, segDurSeconds, onProgress) {
+  const imagePrompt  = typeof p === "string" ? p : p.image;
+  const motionPrompt = typeof p === "string" ? "slow cinematic camera movement" : p.motion;
+
+  onProgress(`Clip ${i + 1}/${total}: generando imagen base (Soul)...`);
+  const imageUrl = await withRetry(() => generateImage(imagePrompt), `imagen ${i + 1}`);
+
+  onProgress(`Clip ${i + 1}/${total}: animando con DoP...`);
+  const videoUrl = await withRetry(() => generateClipFromImage(imageUrl, motionPrompt, segDurSeconds), `video ${i + 1}`);
+
+  onProgress(`Clip ${i + 1}/${total}: listo`);
+  return videoUrl;
+}
+
 async function generateAllClips(prompts, segDurSeconds, onProgress) {
-  const urls = [];
-  for (let i = 0; i < prompts.length; i++) {
-    const p = prompts[i];
-    const imagePrompt  = typeof p === "string" ? p : p.image;
-    const motionPrompt = typeof p === "string" ? "slow cinematic camera movement" : p.motion;
-
-    onProgress(`Clip ${i + 1}/${prompts.length}: generando imagen base (Soul)...`);
-    const imageUrl = await withRetry(() => generateImage(imagePrompt), `imagen ${i + 1}`);
-
-    onProgress(`Clip ${i + 1}/${prompts.length}: animando con DoP...`);
-    const videoUrl = await withRetry(() => generateClipFromImage(imageUrl, motionPrompt, segDurSeconds), `video ${i + 1}`);
-
-    urls.push(videoUrl);
-    if (i < prompts.length - 1) await sleep(2000);
+  const urls = new Array(prompts.length);
+  for (let start = 0; start < prompts.length; start += CONCURRENCY) {
+    const batch = prompts.slice(start, start + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((p, j) => generateOneClip(p, start + j, prompts.length, segDurSeconds, onProgress))
+    );
+    results.forEach((url, j) => { urls[start + j] = url; });
   }
   return urls;
 }
