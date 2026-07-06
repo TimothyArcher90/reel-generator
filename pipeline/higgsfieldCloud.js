@@ -27,7 +27,10 @@ async function submit(modelId, body) {
   return requestId;
 }
 
-async function waitForResult(requestId, timeoutMs = 600000) {
+// Antes 10 minutos de espera x 3 reintentos = hasta ~35 minutos pegado en UN
+// solo clip trabado antes de fallar. Con generaciones normales tomando
+// segundos-a-pocos-minutos, 4 minutos es más que suficiente margen.
+async function waitForResult(requestId, timeoutMs = 240000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     await sleep(6000);
@@ -87,7 +90,9 @@ function isCreditError(e) {
   return s === 402 || body.includes("credit") || body.includes("insufficient") || body.includes("balance");
 }
 
-async function withRetry(fn, label, maxRetries = 3) {
+// maxRetries bajado de 3 a 2: con el timeout ya recortado a 4 min, 3 intentos
+// seguía significando hasta ~12 min pegado en un solo clip antes de fallar.
+async function withRetry(fn, label, maxRetries = 2) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
