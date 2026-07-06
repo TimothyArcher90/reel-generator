@@ -33,8 +33,10 @@ async function waitForResult(requestId, timeoutMs = 600000) {
         || data.output?.url || data.url
         || (Array.isArray(data.result) ? (data.result[0]?.url || data.result[0]) : null)
         || (Array.isArray(data.output) ? (data.output[0]?.url || data.output[0]) : null)
-        || (Array.isArray(data.results) ? (data.results[0]?.url || data.results[0]?.raw?.url) : null);
-      if (!url) throw new Error("Higgsfield: completado pero sin URL — " + JSON.stringify(data).slice(0, 400));
+        || (Array.isArray(data.results) ? (data.results[0]?.url || data.results[0]?.raw?.url) : null)
+        || (Array.isArray(data.images) ? data.images[0]?.url : null)
+        || (Array.isArray(data.videos) ? data.videos[0]?.url : null);
+      if (!url) throw new Error("NO_REINTENTAR: Higgsfield completado pero sin URL reconocible — " + JSON.stringify(data).slice(0, 400));
       return url;
     }
     if (status === "failed" || status === "nsfw" || status === "canceled") {
@@ -76,6 +78,9 @@ async function withRetry(fn, label, maxRetries = 3) {
       if (isCreditError(e)) {
         throw new Error("SIN CRÉDITO en Higgsfield Cloud — recargar en cloud.higgsfield.ai (" + label + ")");
       }
+      // Errores de parseo (respuesta ya cobrada y completada, pero con forma no reconocida)
+      // son deterministas: reintentar solo vuelve a cobrar el mismo clip sin arreglar nada.
+      if (String(e.message || "").startsWith("NO_REINTENTAR:")) throw e;
       if (attempt >= maxRetries) throw e;
       await sleep(attempt * 8000 + Math.random() * 3000);
     }
