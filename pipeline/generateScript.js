@@ -50,7 +50,7 @@ imagePrompts[i] — la COMPOSICIÓN ESTÁTICA (sin cámara, sin movimiento):
   1. Tipo de plano exacto (elige UNO): "Extreme close-up shot", "Close-up shot", "Medium shot", "Wide shot", "Aerial drone shot", "Low-angle shot"
   2. El sujeto elegido de la lista, con máximo 2 adjetivos de material/color (ej. "dark brushed steel", "amber-lit")
   3. Una sola fuente de luz descrita literalmente (ej. "lit by a single strong light source from the left, casting hard shadows")
-  4. Cierra siempre con esta frase exacta: "cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people"
+  4. Cierra siempre con esta frase exacta: "cinematic lighting, high contrast black-and-white base with a single warm gold/amber accent light source, dark editorial financial-terminal aesthetic, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, no text, no logos, no floating particles, no fog, no people"
 
 motionPrompts[i] — SOLO el movimiento (para animar esa imagen):
   - UN solo movimiento de cámara (elige UNO): "camera orbits slowly around the subject", "camera pushes in toward the subject", "camera pulls back from the subject", "camera glides forward over the scene", "camera tilts up along the subject"
@@ -63,7 +63,7 @@ motionPrompts[i] — SOLO el movimiento (para animar esa imagen):
 - El ÚLTIMO motionPrompt debe usar "camera pulls back" o "camera tilts up" para transmitir conclusión/revelación
 
 EJEMPLO correcto (segmento sobre "el capital rota hacia nuevos sectores"):
-imagePrompt: "Aerial drone shot of a dense fiber optic cable network with amber light inside the cables, strung between skyscrapers in a night city, lit by the amber glow from within the cables casting hard shadows on the buildings below, cinematic lighting, high contrast, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, bold dramatic color grade, no text, no logos, no floating particles, no fog, no people"
+imagePrompt: "Aerial drone shot of a dense fiber optic cable network with amber light inside the cables, strung between skyscrapers in a night city, lit by the amber glow from within the cables casting hard shadows on the buildings below, cinematic lighting, high contrast black-and-white base with a single warm gold/amber accent light source, dark editorial financial-terminal aesthetic, sharp focus, powerful composition, 9:16 vertical, photorealistic, 8k, no text, no logos, no floating particles, no fog, no people"
 motionPrompt: "camera glides forward over the scene, amber light pulses rerouting between buildings"
 
 RESPONDE SOLO con este JSON (sin markdown):
