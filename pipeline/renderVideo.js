@@ -42,8 +42,26 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
   const segDur = Math.max(3, duration / N);
   const workDir = path.dirname(clips[0]);
   const w = 720, h = 1280;
-  const trans = 0.5;          // duración del crossfade entre clips
   const tailAfterVoice = 4;   // segundos de video que siguen después de terminar la narración
+
+  // Trucos de montaje: transición distinta en cada corte (no siempre "fade"), y
+  // duración de corte más rápida al inicio (energía del hook) que hacia el cierre
+  // (sensación de resolución) — en vez de un crossfade fijo e idéntico siempre.
+  // El primer corte usa "fadewhite" (flash blanco) para un golpe de energía extra.
+  const transitionTypes = ["fade", "wipeleft", "circleopen", "slideup", "wiperight", "diagtl"];
+  const transTypeFor = cutIndex => cutIndex === 0 ? "fadewhite" : transitionTypes[cutIndex % transitionTypes.length];
+  const transDurFor = cutIndex => (cutIndex < 2 ? 0.25 : cutIndex >= N - 3 ? 0.6 : 0.4);
+
+  // Look de marca por clip (todo gratis, ffmpeg puro, cero costo de API):
+  //  - colorbalance: empuja medios/altas luces hacia dorado/ámbar, sombras más frías —
+  //    refuerza la paleta negro+dorado en cada clip de forma consistente
+  //  - vignette: oscurece bordes, centra la atención, look cinematográfico
+  //  - noise: grano de película sutil, sensación "premium" en vez de plano/digital
+  //  - eq: contraste y saturación ligeramente elevados
+  const brandGrade = "colorbalance=rm=0.05:gm=0.01:bm=-0.07:rh=0.04:bh=-0.05:rs=0.02:bs=-0.03," +
+    "eq=contrast=1.08:saturation=1.06,vignette=PI/4,noise=alls=5:allf=t+u";
+  // Glitch de aberración cromática, alternado en clips impares para variar el ritmo visual
+  const glitchFor = i => (i % 3 === 1 ? ",rgbashift=rh=2:bh=-2" : "");
 
   // 1. Procesar cada clip a una duración UNIFORME real de segDur — antes se asumía
   //    ciegamente que cada clip de Higgsfield medía exactamente segDur, pero a veces
@@ -60,9 +78,12 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
     if (!realDur) throw new Error(`Clip ${i + 1}: no se pudo leer su duración real (archivo posiblemente corrupto)`);
 
     const zoomFrames = Math.round(segDur * 30);
-    const zoomDir = i % 2 === 0 ? "zoom+0.0006" : "zoom-0.0006";
+    // El hook (primer segmento) lleva un zoom-in más marcado y rápido para que el
+    // "pattern interrupt" pegue más fuerte; el resto alterna un zoom sutil in/out.
+    const zoomRate = i === 0 ? "0.0022" : "0.0006";
+    const zoomDir = i === 0 || i % 2 === 0 ? `zoom+${zoomRate}` : `zoom-${zoomRate}`;
     const vf = `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},` +
-      `zoompan=z='${zoomDir}':d=${zoomFrames}:s=${w}x${h}:fps=30,setsar=1,format=yuv420p`;
+      `zoompan=z='${zoomDir}':d=${zoomFrames}:s=${w}x${h}:fps=30,setsar=1,${brandGrade}${glitchFor(i)},format=yuv420p`;
 
     const args = ["-y", "-i", clips[i]];
     if (realDur < segDur - 0.1) {
@@ -87,15 +108,18 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
   let acc = parts[0];
   let accDur = segDur;
   for (let i = 1; i < N; i++) {
+    const cutIndex = i - 1;
+    const trans = transDurFor(cutIndex);
+    const transType = transTypeFor(cutIndex);
     const offset = Math.max(0, accDur - trans);
     const merged = path.join(workDir, `merge${i}.mp4`);
     await run([
       "-y", "-i", acc, "-i", parts[i],
-      "-filter_complex", `[0:v][1:v]xfade=transition=fade:duration=${trans}:offset=${offset.toFixed(2)}[v]`,
+      "-filter_complex", `[0:v][1:v]xfade=transition=${transType}:duration=${trans}:offset=${offset.toFixed(2)}[v]`,
       "-map", "[v]",
       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
       merged
-    ], `xfade ${i}`);
+    ], `xfade ${i} (${transType})`);
     const mergedDur = probeDuration(merged);
     const expectedDur = accDur + segDur - trans;
     if (mergedDur < expectedDur - 1) {
