@@ -37,6 +37,7 @@ async function waitForResult(requestId, timeoutMs = 600000) {
       // El campo del resultado puede variar; cubrir las formas comunes
       const url = data.result?.url || data.result?.video?.url || data.result?.image?.url
         || data.output?.url || data.url
+        || data.video?.url || data.image?.url
         || (Array.isArray(data.result) ? (data.result[0]?.url || data.result[0]) : null)
         || (Array.isArray(data.output) ? (data.output[0]?.url || data.output[0]) : null)
         || (Array.isArray(data.results) ? (data.results[0]?.url || data.results[0]?.raw?.url) : null)
