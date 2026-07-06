@@ -14,7 +14,10 @@ const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 // contra text2speech_v2 dan 404). Queda solo como endpoint de diagnóstico manual
 // (GET /test-voice-higgsfield) hasta que Higgsfield lo habilite — NO se usa en el pipeline.
 const useHiggsfieldVoice = false;
-const useElevenLabs = !useHiggsfieldVoice && !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID);
+// ElevenLabs deshabilitado a propósito (2026-07-06): saldo de ElevenAPI insuficiente,
+// sigue fallando con 401/quota_exceeded. Forzado a Edge-TTS gratis hasta resolver eso
+// aparte — no depende de borrar las variables en Railway.
+const useElevenLabs = false;
 const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : "Edge-TTS (gratis, genérica)";
 
 async function generateVoiceoverHiggsfieldToFile(text, outputPath) {
