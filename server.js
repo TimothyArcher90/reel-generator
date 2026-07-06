@@ -6,11 +6,25 @@ const fs      = require("fs");
 const { generateScript }    = require("./pipeline/generateScript");
 const edgeTts      = require("./pipeline/edgetts");
 const elevenLabs   = require("./pipeline/elevenlabs");
-// Usa la voz clonada de Guillermo (ElevenLabs) si está configurada; si no, cae a Edge-TTS gratis.
-const useElevenLabs = !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID);
-const { generateVoiceover } = useElevenLabs ? elevenLabs : edgeTts;
-const { generateAllClips }  = require("./pipeline/higgsfieldCloud");
+const { generateAllClips, generateVoiceoverHiggsfield, GUILLERMO_VOICE_ID } = require("./pipeline/higgsfieldCloud");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
+
+// Prioridad de voz: Higgsfield (Guillermo, mismo Key/Secret que video, sin costo extra
+// de proveedor) > ElevenLabs (Guillermo, requiere saldo aparte en elevenlabs.io/app/subscription/api)
+// > Edge-TTS gratis (voz genérica, fallback final).
+const useHiggsfieldVoice = !!(process.env.HF_CLOUD_KEY && process.env.HF_CLOUD_SECRET);
+const useElevenLabs = !useHiggsfieldVoice && !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID);
+const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : "Edge-TTS (gratis, genérica)";
+
+async function generateVoiceoverHiggsfieldToFile(text, outputPath) {
+  const url = await generateVoiceoverHiggsfield(text, GUILLERMO_VOICE_ID);
+  await downloadFile(url, outputPath);
+  return outputPath;
+}
+
+const { generateVoiceover } = useHiggsfieldVoice
+  ? { generateVoiceover: generateVoiceoverHiggsfieldToFile }
+  : (useElevenLabs ? elevenLabs : edgeTts);
 const { renderVideo }       = require("./pipeline/renderVideo");
 
 const app  = express();
@@ -78,7 +92,7 @@ async function runPipeline(jobId, text, baseFilename) {
 
   // Step 2 — Voz (ElevenLabs con voz clonada de Guillermo si está configurada; si no, Edge-TTS gratis)
   upd(jobId, { step: 2, statusMsg: "Generando voz..." });
-  log(jobId, `[2/4] Generando voz (${useElevenLabs ? "ElevenLabs — Guillermo" : "Edge-TTS gratis"})...`);
+  log(jobId, `[2/4] Generando voz (${voiceEngineName})...`);
   const audioFile = path.join(workDir, "audio.mp3");
   await withTimeout(generateVoiceover(script.voiceover, audioFile), 120000, "Voiceover timeout");
   const duration = await getAudioDuration(audioFile);
@@ -237,10 +251,22 @@ app.get("/test-voice", async (req, res) => {
     await generateVoiceover("Hola, esta es una prueba de la voz para los reels del equipo.", out);
     res.json({
       ok: true,
-      voice: useElevenLabs ? "ElevenLabs (Guillermo)" : "Edge-TTS (gratis, genérica)",
+      voice: voiceEngineName,
       audio: "/download/test-voice.mp3",
       nota: "Abre el link 'audio' para escuchar la voz"
     });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
+});
+
+// ── GET /test-voice-higgsfield ── prueba barata y aislada de la voz de Guillermo
+// vía Higgsfield Cloud (1 frase corta), sin tocar el resto del pipeline ──────
+app.get("/test-voice-higgsfield", async (req, res) => {
+  try {
+    const out = path.join("outputs", "test-voice-higgsfield.mp3");
+    await generateVoiceoverHiggsfieldToFile("Hola, esta es una prueba de la voz de Guillermo vía Higgsfield.", out);
+    res.json({ ok: true, audio: "/download/test-voice-higgsfield.mp3", nota: "Si suena bien, ya podemos usar esta voz en el pipeline principal" });
   } catch (e) {
     res.status(500).json({ ok: false, error: friendlyError(e) });
   }

@@ -6,6 +6,12 @@ const axios = require("axios");
 const BASE = "https://platform.higgsfield.ai";
 const IMAGE_MODEL = "higgsfield-ai/soul/standard";
 const VIDEO_MODEL = "higgsfield-ai/dop/preview";
+// NO CONFIRMADO todavía contra la API real — nombre inferido por convención de
+// los otros dos modelos (soul/standard, dop/preview) + el endpoint "text2speech_v2"
+// documentado públicamente por Higgsfield. Verificar con GET /test-voice-higgsfield
+// (server.js) antes de usarlo en un reel real.
+const TTS_MODEL = "higgsfield-ai/text2speech/v2";
+const GUILLERMO_VOICE_ID = "6f4d5e1b-cd31-484a-8aff-0c8ee3e19d2b"; // "Guillermo-Voice-Clone"
 
 function authHeader() {
   const key    = process.env.HF_CLOUD_KEY;
@@ -64,6 +70,15 @@ async function generateClipFromImage(imageUrl, motionPrompt, durationSeconds) {
   return waitForResult(id);
 }
 
+async function generateVoiceoverHiggsfield(text, voiceId = GUILLERMO_VOICE_ID) {
+  const id = await submit(TTS_MODEL, {
+    prompt:     text,
+    voice_id:   voiceId,
+    voice_type: "element"
+  });
+  return waitForResult(id);
+}
+
 function isCreditError(e) {
   const s = e.response?.status;
   const body = JSON.stringify(e.response?.data || "").toLowerCase();
@@ -109,4 +124,4 @@ async function generateAllClips(prompts, segDurSeconds, onProgress) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-module.exports = { generateAllClips, generateImage, generateClipFromImage };
+module.exports = { generateAllClips, generateImage, generateClipFromImage, generateVoiceoverHiggsfield, GUILLERMO_VOICE_ID };
