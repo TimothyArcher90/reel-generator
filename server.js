@@ -261,6 +261,20 @@ app.get("/test-voice", async (req, res) => {
   }
 });
 
+// ── GET /test-voice-minimax ── prueba barata y aislada de la voz de MiniMax
+// (API directa, no Replicate) — para saber qué voice_id hay guardado ────────
+app.get("/test-voice-minimax", async (req, res) => {
+  try {
+    const minimax = require("./pipeline/minimax");
+    const out = path.join("outputs", "test-voice-minimax.mp3");
+    const url = await minimax.generateVoiceover("Hola, esta es una prueba de la voz vía MiniMax.");
+    await downloadFile(url, out);
+    res.json({ ok: true, audio: "/download/test-voice-minimax.mp3", voiceIdUsado: process.env.MINIMAX_VOICE_ID, nota: "Abre el link 'audio' y escucha si es Guillermo o una voz genérica" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
+});
+
 // ── GET /test-voice-higgsfield ── prueba barata y aislada de la voz de Guillermo
 // vía Higgsfield Cloud (1 frase corta), sin tocar el resto del pipeline ──────
 app.get("/test-voice-higgsfield", async (req, res) => {
