@@ -311,7 +311,7 @@ app.get("/test-clip", async (req, res) => {
     await downloadFile(videoUrl, out);
     res.json({ ok: true, image: imageUrl, video: "/download/test-clip.mp4", nota: "Este es un clip real con la línea gráfica y animación final" });
   } catch (e) {
-    res.status(500).json({ ok: false, error: friendlyError(e) });
+    res.status(500).json({ ok: false, error: friendlyError(e), detalle: e.response?.data || null });
   }
 });
 
