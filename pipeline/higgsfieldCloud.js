@@ -9,7 +9,7 @@ const VIDEO_MODEL = "higgsfield-ai/dop/preview";
 // Confirmado vía models_explore (MCP de Higgsfield): id real "text2speech_v2",
 // requiere variant (motor), voice_type, voice_id. Ruta REST aún no confirmada
 // contra la API real — verificar con GET /test-voice-higgsfield antes de un reel real.
-const TTS_MODEL = "higgsfield-ai/text2speech_v2";
+const TTS_MODEL = "text2speech_v2";
 const TTS_VARIANT = "elevenlabs"; // motor bajo el cual probablemente se clonó la voz
 const GUILLERMO_VOICE_ID = "6f4d5e1b-cd31-484a-8aff-0c8ee3e19d2b"; // "Guillermo-Voice-Clone"
 
