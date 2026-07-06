@@ -10,7 +10,7 @@ async function generateScript(articleText) {
       role: "user",
       content: `Eres director creativo de una productora premium de contenido financiero/tech (nivel: reels de Bloomberg, a16z, Not Boring). Creas reels que detienen el scroll en 1 segundo.
 
-A partir del artículo, crea un guion de reel VIRAL de entre 30 y 80 segundos EN TOTAL — este rango es un límite duro, nunca lo excedas ni te quedes corto. Dentro de ese rango, el número de segmentos lo decide el contenido (normalmente entre 5 y 10), cada uno de 4-8 segundos hablados — prioriza las ideas más fuertes del artículo, descarta lo secundario, no trates de meter todo el artículo si no cabe en 80 segundos.
+A partir del artículo, crea un guion de reel VIRAL de entre 30 y 60 segundos EN TOTAL — este rango es un límite duro, nunca lo excedas ni te quedes corto. Dentro de ese rango, usa MUCHOS segmentos CORTOS (normalmente entre 9 y 14), cada uno de 3-5 segundos hablados — el ritmo rápido de corte es lo que sostiene la retención; un plano de más de 5 segundos se siente lento y pierde al espectador. Prioriza las ideas más fuertes del artículo, descarta lo secundario, no trates de meter todo el artículo si no cabe en 60 segundos.
 
 ESTRATEGIA VIRAL (sin dañar la marca — nada de clickbait engañoso, exageraciones falsas o sensacionalismo barato; la marca es seria, precisa, con autoridad):
 - Los primeros 1-2 segundos deben crear un "pattern interrupt": una afirmación que contradiga lo obvio o genere una pregunta inmediata en la cabeza del espectador
@@ -34,17 +34,17 @@ REGLAS DEL GUION (español):
 REGLAS VISUALES (inglés — el pipeline genera primero UNA IMAGEN por segmento y luego la ANIMA; por eso hay DOS campos: imagePrompts y motionPrompts. PRIORIDAD MÁXIMA: CERO AMBIGÜEDAD):
 El generador interpreta literalmente cada palabra. Cada imagePrompt debe describir UNA sola imagen posible, sin espacio para interpretación.
 
-Para cada segmento, elige EXACTAMENTE UNO de estos sujetos (no combines, no ofrezcas alternativas con "or"; comprométete a uno solo):
-  * Crecimiento / escala / expansión → una cordillera montañosa nevada vista desde un dron, extendiéndose hasta el horizonte
+ENFOQUE VISUAL OBLIGATORIO: TECH. Todos los sujetos deben sentirse de tecnología/cómputo/infraestructura digital — nada de naturaleza genérica (nada de montañas, cascadas, océano, ADN, planetas). Para cada segmento, elige EXACTAMENTE UNO de estos sujetos (no combines, no ofrezcas alternativas con "or"; comprométete a uno solo):
+  * Escala / crecimiento de cómputo → una hilera interminable de racks de GPUs en un data center hiperescala, vista en perspectiva hasta el horizonte
   * Conexión / redes / relaciones → una red de cables de fibra óptica reales con luz ámbar viajando por su interior, tendidos entre edificios de una ciudad de noche
-  * Riesgo / caída / colapso → una cascada de agua real cayendo con fuerza sobre rocas oscuras
+  * Riesgo / caída / colapso → un chip de silicio de cerca resquebrajándose, fragmentos cayendo en cámara lenta sobre una superficie oscura
   * Poder / control / concentración → un rascacielos financiero de vidrio y acero fotografiado desde la base mirando hacia arriba
-  * Datos / tecnología / IA → un pasillo de racks de servidores con luces LED ámbar parpadeando en la oscuridad
-  * Tiempo / ciclos / historia → un reloj mecánico de bronce con engranajes grandes girando, visto de cerca
-  * Océano / flujo / liquidez → olas de mar reales rompiendo contra rocas, filmadas desde un dron bajo
-  * Origen / fundamentos / biología → una doble hélice de ADN esculpida en metal sólido, iluminada desde un lado
-  * Cosmos / incertidumbre / escala infinita → un planeta rocoso visto desde una nave, con estrellas de fondo
-  * Precisión / ingeniería / maquinaria → brazos robóticos industriales de metal ensamblando piezas con precisión
+  * Datos / IA / procesamiento → un pasillo de racks de servidores con luces LED ámbar parpadeando en la oscuridad
+  * Tiempo / ciclos / iteración → un brazo robótico de precisión repitiendo un mismo movimiento mecánico, visto de cerca
+  * Flujo / liquidez de capital → una placa base (motherboard) iluminada desde abajo, con corrientes de luz ámbar recorriendo sus circuitos como ríos
+  * Origen / fundamentos → un wafer de semiconductor siendo grabado con luz ultravioleta en una sala limpia
+  * Escala infinita / incertidumbre → un dron o satélite sobrevolando una red de antenas/data centers vista desde el aire, de noche
+  * Precisión / ingeniería / maquinaria → brazos robóticos industriales de metal ensamblando piezas de hardware con precisión
 
 imagePrompts[i] — la COMPOSICIÓN ESTÁTICA (sin cámara, sin movimiento):
   1. Tipo de plano exacto (elige UNO): "Extreme close-up shot", "Close-up shot", "Medium shot", "Wide shot", "Aerial drone shot", "Low-angle shot"
