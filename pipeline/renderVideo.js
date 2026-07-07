@@ -60,8 +60,11 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
   //  - vignette: oscurece bordes, centra la atención, look cinematográfico
   //  - noise: grano de película sutil, sensación "premium" en vez de plano/digital
   //  - eq: contraste y saturación ligeramente elevados
+  // Se quitó el filtro "noise" (grano): era el más caro del render y con 12 clips
+  // hacía que ffmpeg se pasara del timeout. El look de marca (color+viñeta+contraste)
+  // se mantiene y sigue viéndose premium, pero procesa mucho más rápido.
   const brandGrade = "colorbalance=rm=0.05:gm=0.01:bm=-0.07:rh=0.04:bh=-0.05:rs=0.02:bs=-0.03," +
-    "eq=contrast=1.08:saturation=1.06,vignette=PI/4,noise=alls=5:allf=t+u";
+    "eq=contrast=1.08:saturation=1.06,vignette=PI/4";
   // Glitch de aberración cromática: retirado a pedido — riesgo de verse "barato/gimmick"
   // en vez de profesional. Se deja solo el look de marca (color, viñeta, grano).
   const glitchFor = () => "";
@@ -85,7 +88,10 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
     // "pattern interrupt" pegue más fuerte; el resto alterna un zoom sutil in/out.
     const zoomRate = i === 0 ? "0.0022" : "0.0006";
     const zoomDir = i === 0 || i % 2 === 0 ? `zoom+${zoomRate}` : `zoom-${zoomRate}`;
-    const vf = `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,crop=${w * 2}:${h * 2},` +
+    // Escala a 1.25x (antes 2x) — suficiente margen para el zoom Ken Burns pero
+    // procesa mucho más rápido; el zoompan sigue reduciendo a la salida final wxh.
+    const sw = Math.round(w * 1.25), sh = Math.round(h * 1.25);
+    const vf = `scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${sw}:${sh},` +
       `zoompan=z='${zoomDir}':d=${zoomFrames}:s=${w}x${h}:fps=30,setsar=1,${brandGrade}${glitchFor(i)},format=yuv420p`;
 
     let args;

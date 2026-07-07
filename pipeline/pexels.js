@@ -24,13 +24,19 @@ async function searchOnce(query, key) {
   });
   const videos = data.videos || [];
   const candidates = [];
+  // El reel de salida es 720x1280. Elegir el archivo VERTICAL cuya altura esté
+  // MÁS CERCA de ~1280 (no el más grande) — antes se elegía el 4K/UHD, que hacía
+  // que ffmpeg tardara minutos decodificando y el render se pasara del timeout.
+  // Un clip ~1080-1280 se ve idéntico en el reel final y procesa mucho más rápido.
+  const TARGET_H = 1280;
   for (const v of videos) {
-    let bestFile = null, bestScore = -1;
+    let bestFile = null, bestDist = Infinity;
     for (const file of v.video_files || []) {
-      if (!file.link || file.height < 720) continue;
+      if (!file.link || file.height < 900) continue; // descartar los muy chicos/borrosos
       const isVertical = file.height > file.width;
-      const score = (isVertical ? 1000000 : 0) + (file.width * file.height);
-      if (score > bestScore) { bestScore = score; bestFile = file; }
+      if (!isVertical) continue;                       // solo verticales para 9:16
+      const dist = Math.abs(file.height - TARGET_H) + (file.height > 2000 ? 5000 : 0); // penaliza 4K
+      if (dist < bestDist) { bestDist = dist; bestFile = file; }
     }
     if (bestFile) candidates.push(bestFile);
   }

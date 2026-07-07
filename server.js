@@ -198,7 +198,7 @@ async function runPipeline(jobId, text, baseFilename) {
   const outMp4 = path.join("outputs", `${jobId}.mp4`);
   await withTimeout(
     renderVideo({ clips: clipFiles, audioFile, duration, outPath: outMp4 }),
-    Math.max(300000, N * 40000), "ffmpeg render timeout" // escala con N (procesa + N-1 merges xfade)
+    Math.max(600000, N * 60000), "ffmpeg render timeout" // más margen; escala con N (procesa + N-1 merges xfade)
   );
 
   upd(jobId, {
