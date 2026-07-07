@@ -80,18 +80,18 @@ const useHiggsfieldVoice = false;
 // aparte — no depende de borrar las variables en Railway.
 const useElevenLabs = false;
 // Clonación de voz REAL de Guillermo, gratis, vía el Space público de Hugging
-// Face "mrfakename/E2-F5-TTS" (modelo F5-TTS, ZeroGPU real A10G — ver
-// pipeline/voiceCloneF5.js, contrato de API verificado en vivo, no adivinado).
-// Se probó primero myshell-ai/OpenVoiceV2 pero corre Gradio 3.48 (2023),
-// incompatible con el protocolo del @gradio/client actual (confirmado con
-// fetch instrumentado: pide /config/info, ruta que no existe en Gradio 3.x).
-// F5-TTS corre Gradio 5.39 y SÍ conecta y genera audio real (~7-8s en prueba
-// en vivo). Sigue siendo un recurso ZeroGPU gratuito compartido por toda la
-// comunidad, así que la latencia real puede variar; por eso siempre va con
-// timeout acotado y cae a Edge-TTS si no responde a tiempo — el pipeline
-// NUNCA debe poder colgarse por esto.
+// Face "hasanbasbunar/Voice-Cloning-XTTS-v2" (modelo XTTS-v2 — ver
+// pipeline/voiceCloneXTTS.js, contrato de API verificado en vivo, no
+// adivinado). Se probó primero F5-TTS (mrfakename/E2-F5-TTS): conectaba bien
+// pero sonaba con acento extraño/afrancesado porque su modelo base es
+// inglés-céntrico sin fonemas de español entrenados — feedback real del
+// usuario tras escuchar el resultado. XTTS-v2 SÍ tiene un selector de idioma
+// explícito ("Spanish") con manejo dedicado de fonemas en español.
+// Recurso ZeroGPU gratuito compartido por la comunidad — latencia variable,
+// por eso siempre va con timeout acotado y cae a Edge-TTS si no responde a
+// tiempo — el pipeline NUNCA debe poder colgarse por esto.
 const useVoiceClone = true;
-const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : useVoiceClone ? "F5-TTS (clon de Guillermo, gratis)" : "Edge-TTS (gratis, genérica)";
+const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : useVoiceClone ? "XTTS-v2 (clon de Guillermo, gratis)" : "Edge-TTS (gratis, genérica)";
 
 async function generateVoiceoverHiggsfieldToFile(text, outputPath) {
   const url = await generateVoiceoverHiggsfield(text, GUILLERMO_VOICE_ID);
@@ -99,17 +99,17 @@ async function generateVoiceoverHiggsfieldToFile(text, outputPath) {
   return outputPath;
 }
 
-const voiceCloneF5 = require("./pipeline/voiceCloneF5");
+const voiceCloneXTTS = require("./pipeline/voiceCloneXTTS");
 async function generateVoiceoverCloneWithFallback(text, outputPath, onProgress = () => {}) {
   try {
-    onProgress("Clonando voz de Guillermo (F5-TTS, gratis)...");
-    const url = await withTimeout(voiceCloneF5.cloneVoice(text), 90000, "F5-TTS timeout");
-    await voiceCloneF5.downloadTo(url, outputPath);
+    onProgress("Clonando voz de Guillermo (XTTS-v2, gratis)...");
+    const url = await withTimeout(voiceCloneXTTS.cloneVoice(text), 90000, "XTTS-v2 timeout");
+    await voiceCloneXTTS.downloadTo(url, outputPath);
     onProgress("Voz clonada lista.");
   } catch (e) {
     // ZeroGPU gratuito compartido — puede tardar demasiado o fallar por cuota.
     // Nunca debe tumbar el reel: cae a Edge-TTS (siempre funciona, sin cuota).
-    onProgress(`F5-TTS no respondió a tiempo (${e.message}) — usando Edge-TTS de respaldo...`);
+    onProgress(`XTTS-v2 no respondió a tiempo (${e.message}) — usando Edge-TTS de respaldo...`);
     await edgeTts.generateVoiceover(text, outputPath);
   }
 }
