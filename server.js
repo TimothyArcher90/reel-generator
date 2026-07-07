@@ -19,22 +19,26 @@ const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 // con el número real de segmentos del guion.
 const useLTXVideo = true;
 
+// prompts: array de { video, stock } por segmento — 'video' es el prompt
+// cinematográfico rico (para LTX/IA), 'stock' es la consulta corta y concreta
+// derivada del CONTENIDO real del segmento (para el respaldo de Pexels).
 async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
   const urls = [];
   for (let i = 0; i < prompts.length; i++) {
     const p = prompts[i];
-    const imagePrompt  = typeof p === "string" ? p : p.image;
-    const motionPrompt = typeof p === "string" ? "slow cinematic camera movement" : p.motion;
+    const videoPrompt = typeof p === "string" ? p : p.video;
+    const stockQuery  = typeof p === "string" ? p : (p.stock || p.video);
     onProgress(`Clip ${i + 1}/${prompts.length}: generando video (LTX-Video, gratis)...`);
     let videoUrl;
     try {
-      videoUrl = await ltxSpace.generateClip(`${imagePrompt}. ${motionPrompt}`, segDurSeconds);
+      videoUrl = await ltxSpace.generateClip(videoPrompt, segDurSeconds);
     } catch (e) {
-      // LTX-Video (cuota gratis compartida) puede fallar en cualquier momento — en
-      // vez de tirar el reel completo, cae a un video de stock real de Pexels
-      // (también gratis) sobre el mismo tema, así el reel SIEMPRE se completa.
-      onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video falló (${e.message.slice(0, 100)}) — usando video de stock de Pexels`);
-      videoUrl = await pexels.searchVideo(imagePrompt);
+      // LTX-Video (cuota gratis compartida) puede fallar por cuota/caída — en vez
+      // de tirar el reel, cae a un video de stock real de Pexels buscado con la
+      // consulta DERIVADA DEL CONTENIDO de ese segmento (no un tema fijo), así el
+      // clip es relevante a lo que se dice y el reel SIEMPRE se completa.
+      onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota — video de stock de Pexels ("${stockQuery}")`);
+      videoUrl = await pexels.searchVideo(stockQuery);
     }
     urls.push({ type: "video", url: videoUrl });
     onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
@@ -158,10 +162,14 @@ async function runPipeline(jobId, text, baseFilename) {
 
   // Step 3 — Video clips (Higgsfield Cloud: imagen Soul + animación DoP por segmento)
   const segDur = Math.max(3, duration / N);
-  // Pares imagen/movimiento; fallback a videoPrompts si el guion viene en formato viejo
-  const visualPrompts = (script.imagePrompts && script.motionPrompts)
-    ? script.imagePrompts.map((img, i) => ({ image: img, motion: script.motionPrompts[i] || "slow cinematic camera movement" }))
-    : (script.videoPrompts || []);
+  // Formato nuevo: videoPrompts (cinematográfico rico) + stockQueries (consulta
+  // concreta derivada del contenido de cada segmento). Fallback al formato viejo
+  // (imagePrompts/motionPrompts) por si un guion antiguo quedara en cola.
+  const visualPrompts = (script.videoPrompts && script.stockQueries)
+    ? script.videoPrompts.map((v, i) => ({ video: v, stock: script.stockQueries[i] || v }))
+    : (script.imagePrompts && script.motionPrompts)
+      ? script.imagePrompts.map((img, i) => ({ video: `${img}. ${script.motionPrompts[i] || ""}`, stock: img }))
+      : (script.videoPrompts || []).map(v => ({ video: v, stock: v }));
   upd(jobId, { step: 3, statusMsg: `Generando ${N} clips de video...` });
   log(jobId, `[3/4] Generando ${N} clips (${useLTXVideo ? "LTX-Video gratis" : "Higgsfield Soul+DoP"}, ~${segDur.toFixed(1)}s c/u)...`);
   const clipUrls = await withTimeout(

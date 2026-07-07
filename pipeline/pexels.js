@@ -1,54 +1,28 @@
-// Video de stock real vía Pexels (100% gratis, sin mínimo, ya con PEXELS_API_KEY
-// configurada en Railway). Sirve como respaldo final cuando la generación por IA
-// (LTX-Video/Higgsfield) falla — así el reel SIEMPRE se completa con algo real,
-// nunca se cae del todo.
+// Video de stock real vía Pexels (100% gratis, sin mínimo, PEXELS_API_KEY en
+// Railway). Respaldo cuando la generación por IA (LTX-Video) falla — pero ahora
+// la consulta viene DERIVADA DEL CONTENIDO REAL de cada segmento (campo
+// stockQueries que Claude genera por segmento en generateScript.js), no de un
+// tema fijo. Así el clip de stock es relevante a lo que se está diciendo.
 const axios = require("axios");
 
-// Mapeo de temas → término de búsqueda curado. Antes se usaba el prompt
-// cinematográfico completo tal cual (ej. "Low-angle shot of a glass and steel...")
-// y Pexels devolvía resultados irrelevantes/borrosos (un pasillo, equipo de audio
-// con marca visible) porque esas palabras de dirección de cámara confunden la
-// búsqueda. Ahora se detecta el sujeto real del prompt (ya viene de una lista
-// fija en generateScript.js) y se usa un término de búsqueda probado para ese tema.
-// Cada query de abajo fue DESCARGADA Y REVISADA visualmente (no solo listada)
-// antes de dejarla — varias consultas "obvias" (server room, fiber optic cables,
-// data center racks) resultaron en videos totalmente ajenos al tema (una bodega
-// de cajas, pulseras de tela, alguien tecleando) y se descartaron. Solo quedan
-// las que se confirmaron con imagen real coherente y de alta calidad.
-const TOPIC_QUERIES = [
-  { keywords: ["skyscraper", "financial", "glass and steel"], query: "financial skyscraper glass building" }, // verificado: rascacielos reales, ángulo bajo, cielo azul
-  { keywords: ["robotic arm", "robot", "machinery", "assembling"], query: "robotic arm factory automation" }, // verificado: brazo robótico industrial real
-  // Todo lo demás (servidores, fibra óptica, chips, placas, drones) usa esta
-  // consulta única verificada — un render abstracto tech de alta calidad,
-  // coherente con la marca, en vez de arriesgar términos literales sin probar.
-  { keywords: ["gpu", "rack", "data center", "server", "fiber optic", "cable", "network", "chip", "silicon", "wafer", "semiconductor", "motherboard", "circuits", "drone", "satellite", "antenna", "aerial", "led", "processing"], query: "computer hardware close up technology" }
-];
-const DEFAULT_QUERY = "computer hardware close up technology";
-
-function queryFor(imagePrompt) {
-  const lower = (imagePrompt || "").toLowerCase();
-  for (const topic of TOPIC_QUERIES) {
-    if (topic.keywords.some(k => lower.includes(k))) return topic.query;
-  }
-  return DEFAULT_QUERY;
+// Limpia la consulta: minúsculas, sin puntuación, máximo unas pocas palabras.
+function cleanQuery(q) {
+  const cleaned = String(q || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ").slice(0, 5).join(" ");
+  return cleaned || "abstract technology";
 }
 
-async function searchVideo(imagePrompt) {
-  const key = process.env.PEXELS_API_KEY;
-  if (!key) throw new Error("Falta PEXELS_API_KEY en Railway");
-
-  const query = queryFor(imagePrompt);
+async function searchOnce(query, key) {
   const { data } = await axios.get("https://api.pexels.com/videos/search", {
     headers: { Authorization: key },
-    params: { query, orientation: "portrait", per_page: 10 },
+    params: { query, orientation: "portrait", per_page: 12 },
     timeout: 15000
   });
-
   const videos = data.videos || [];
-  if (!videos.length) throw new Error(`Pexels: sin resultados para "${query}"`);
-
-  // Un archivo vertical de buena resolución por cada video de la búsqueda,
-  // descartando resoluciones muy bajas (esas suelen ser los recortes borrosos).
   const candidates = [];
   for (const v of videos) {
     let bestFile = null, bestScore = -1;
@@ -60,11 +34,32 @@ async function searchVideo(imagePrompt) {
     }
     if (bestFile) candidates.push(bestFile);
   }
-  if (!candidates.length) throw new Error(`Pexels: "${query}" sin archivos de video en buena resolución`);
+  return candidates;
+}
 
-  // Elegir al azar entre los mejores resultados (no siempre el mismo) para que
-  // varios segmentos con la misma query no repitan el idéntico clip de stock.
-  const top = candidates.slice(0, 5);
+// query: consulta concreta derivada del contenido (ej. "dna double helix").
+async function searchVideo(query) {
+  const key = process.env.PEXELS_API_KEY;
+  if (!key) throw new Error("Falta PEXELS_API_KEY en Railway");
+
+  const primary = cleanQuery(query);
+  let candidates = await searchOnce(primary, key);
+
+  // Si la consulta exacta no da resultados verticales de buena resolución,
+  // reintentar con solo las 2 primeras palabras (más genérico), y como último
+  // recurso un término abstracto neutro — así nunca se queda sin video.
+  if (!candidates.length) {
+    const broader = primary.split(" ").slice(0, 2).join(" ");
+    if (broader && broader !== primary) candidates = await searchOnce(broader, key);
+  }
+  if (!candidates.length) {
+    candidates = await searchOnce("abstract cinematic background", key);
+  }
+  if (!candidates.length) throw new Error(`Pexels: sin video utilizable para "${primary}"`);
+
+  // Elegir al azar entre los mejores para que segmentos con consulta parecida no
+  // repitan el idéntico clip.
+  const top = candidates.slice(0, 6);
   return top[Math.floor(Math.random() * top.length)].link;
 }
 
