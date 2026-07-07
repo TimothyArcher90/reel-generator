@@ -8,29 +8,37 @@ const edgeTts      = require("./pipeline/edgetts");
 const elevenLabs   = require("./pipeline/elevenlabs");
 const { generateAllClips, generateVoiceoverHiggsfield, GUILLERMO_VOICE_ID } = require("./pipeline/higgsfieldCloud");
 const ltxSpace = require("./pipeline/ltxSpace");
+const pexels = require("./pipeline/pexels");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 
 // Motor de video: Higgsfield Cloud (pago, saldo agotado 2026-07-06) vs
-// LTX-Video vía Hugging Face Space gratis (ZeroGPU, cuota diaria limitada).
-// Forzado a LTX mientras no haya saldo en Higgsfield — 100% gratis, pero con
-// cuota de minutos de GPU/día muy chica, por eso se limita el número de clips.
+// LTX-Video vía Hugging Face Space gratis (ZeroGPU, cuota diaria limitada) con
+// respaldo automático a Pexels (video de stock real, gratis, sin límite de
+// cuota de GPU) si LTX falla en cualquier clip. Sin tope de clips: cada uno
+// intenta LTX primero y cae a Pexels si falla, así el reel siempre se completa
+// con el número real de segmentos del guion.
 const useLTXVideo = true;
-const MAX_CLIPS_LTX = 4; // tope para no exceder la cuota gratis de ZeroGPU en un solo reel
 
 async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
-  const capped = prompts.slice(0, MAX_CLIPS_LTX);
-  if (capped.length < prompts.length) {
-    onProgress(`Nota: usando solo los primeros ${capped.length} segmentos (límite de cuota gratis de LTX-Video)`);
-  }
   const urls = [];
-  for (let i = 0; i < capped.length; i++) {
-    const p = capped[i];
+  for (let i = 0; i < prompts.length; i++) {
+    const p = prompts[i];
     const imagePrompt  = typeof p === "string" ? p : p.image;
     const motionPrompt = typeof p === "string" ? "slow cinematic camera movement" : p.motion;
-    onProgress(`Clip ${i + 1}/${capped.length}: generando video (LTX-Video, gratis)...`);
-    const videoUrl = await ltxSpace.generateClip(`${imagePrompt}. ${motionPrompt}`, segDurSeconds);
+    onProgress(`Clip ${i + 1}/${prompts.length}: generando video (LTX-Video, gratis)...`);
+    let videoUrl;
+    try {
+      videoUrl = await ltxSpace.generateClip(`${imagePrompt}. ${motionPrompt}`, segDurSeconds);
+    } catch (e) {
+      // LTX-Video (cuota gratis compartida) puede fallar en cualquier momento — en
+      // vez de tirar el reel completo, cae a un video de stock real de Pexels
+      // (también gratis) sobre el mismo tema, así el reel SIEMPRE se completa.
+      onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video falló (${e.message.slice(0, 100)}) — usando video de stock de Pexels`);
+      const query = imagePrompt.split(",")[0].split(" ").slice(0, 6).join(" ");
+      videoUrl = await pexels.searchVideo(query);
+    }
     urls.push({ type: "video", url: videoUrl });
-    onProgress(`Clip ${i + 1}/${capped.length}: listo`);
+    onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
   }
   return urls;
 }
@@ -344,6 +352,16 @@ app.get("/test-voice-higgsfield", async (req, res) => {
     const out = path.join("outputs", "test-voice-higgsfield.mp3");
     await generateVoiceoverHiggsfieldToFile("Hola, esta es una prueba de la voz de Guillermo vía Higgsfield.", out);
     res.json({ ok: true, audio: "/download/test-voice-higgsfield.mp3", nota: "Si suena bien, ya podemos usar esta voz en el pipeline principal" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
+});
+
+// ── GET /test-pexels ── prueba gratis e ilimitada del respaldo de video de stock ──
+app.get("/test-pexels", async (req, res) => {
+  try {
+    const url = await pexels.searchVideo(req.query.q || "server room data center");
+    res.json({ ok: true, video: url, nota: "Video de stock real de Pexels — respaldo cuando LTX-Video falla" });
   } catch (e) {
     res.status(500).json({ ok: false, error: friendlyError(e) });
   }
