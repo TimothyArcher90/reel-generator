@@ -7,7 +7,33 @@ const { generateScript }    = require("./pipeline/generateScript");
 const edgeTts      = require("./pipeline/edgetts");
 const elevenLabs   = require("./pipeline/elevenlabs");
 const { generateAllClips, generateVoiceoverHiggsfield, GUILLERMO_VOICE_ID } = require("./pipeline/higgsfieldCloud");
+const ltxSpace = require("./pipeline/ltxSpace");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
+
+// Motor de video: Higgsfield Cloud (pago, saldo agotado 2026-07-06) vs
+// LTX-Video vía Hugging Face Space gratis (ZeroGPU, cuota diaria limitada).
+// Forzado a LTX mientras no haya saldo en Higgsfield — 100% gratis, pero con
+// cuota de minutos de GPU/día muy chica, por eso se limita el número de clips.
+const useLTXVideo = true;
+const MAX_CLIPS_LTX = 4; // tope para no exceder la cuota gratis de ZeroGPU en un solo reel
+
+async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
+  const capped = prompts.slice(0, MAX_CLIPS_LTX);
+  if (capped.length < prompts.length) {
+    onProgress(`Nota: usando solo los primeros ${capped.length} segmentos (límite de cuota gratis de LTX-Video)`);
+  }
+  const urls = [];
+  for (let i = 0; i < capped.length; i++) {
+    const p = capped[i];
+    const imagePrompt  = typeof p === "string" ? p : p.image;
+    const motionPrompt = typeof p === "string" ? "slow cinematic camera movement" : p.motion;
+    onProgress(`Clip ${i + 1}/${capped.length}: generando video (LTX-Video, gratis)...`);
+    const videoUrl = await ltxSpace.generateClip(`${imagePrompt}. ${motionPrompt}`, segDurSeconds);
+    urls.push({ type: "video", url: videoUrl });
+    onProgress(`Clip ${i + 1}/${capped.length}: listo`);
+  }
+  return urls;
+}
 
 // Higgsfield Cloud API NO tiene modelo de texto-a-voz disponible en este plan/cuenta
 // (confirmado 2026-07-06: no aparece en el catálogo de /dashboard, todos los intentos
@@ -130,11 +156,16 @@ async function runPipeline(jobId, text, baseFilename) {
     ? script.imagePrompts.map((img, i) => ({ image: img, motion: script.motionPrompts[i] || "slow cinematic camera movement" }))
     : (script.videoPrompts || []);
   upd(jobId, { step: 3, statusMsg: `Generando ${N} clips de video...` });
-  log(jobId, `[3/4] Generando ${N} clips (Higgsfield Soul+DoP, ~${segDur.toFixed(1)}s c/u)...`);
+  log(jobId, `[3/4] Generando ${N} clips (${useLTXVideo ? "LTX-Video gratis" : "Higgsfield Soul+DoP"}, ~${segDur.toFixed(1)}s c/u)...`);
   const clipUrls = await withTimeout(
-    generateAllClips(visualPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
+    useLTXVideo
+      ? generateAllClipsLTX(visualPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); })
+      : generateAllClips(visualPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
     Math.max(1500000, N * 400000), "Video clips timeout" // imagen+video por segmento, escala con N
   );
+  // Nota: si LTX generó menos clips que segmentos del guion (tope de cuota gratis),
+  // renderVideo.js ya recalcula segDur internamente a partir de clips.length, así
+  // que cada clip se estira automáticamente para cubrir la duración total del audio.
   const clipFiles = [];
   for (let i = 0; i < clipUrls.length; i++) {
     const clip = clipUrls[i];
@@ -343,6 +374,22 @@ app.get("/test-clip", async (req, res) => {
     res.json({ ok: true, image: imageUrl, video: "/download/test-clip.mp4", nota: "Este es un clip real con la línea gráfica y animación final" });
   } catch (e) {
     res.status(500).json({ ok: false, error: friendlyError(e), detalle: e.response?.data || null });
+  }
+});
+
+// ── GET /test-clip-ltx ── prueba barata (1 clip corto) del motor gratis LTX-Video
+// vía Hugging Face Space — consume cuota diaria de ZeroGPU, usar con moderación ──
+app.get("/test-clip-ltx", async (req, res) => {
+  try {
+    const url = await ltxSpace.generateClip(
+      "Low-angle shot of a glass and steel financial skyscraper, cinematic lighting, gold accent light, 9:16 vertical, photorealistic",
+      3
+    );
+    const out = path.join("outputs", "test-clip-ltx.mp4");
+    await downloadFile(url, out);
+    res.json({ ok: true, video: "/download/test-clip-ltx.mp4", nota: "Motor gratis LTX-Video (Hugging Face Space) funcionando" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
   }
 });
 
