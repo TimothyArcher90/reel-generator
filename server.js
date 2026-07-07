@@ -396,10 +396,16 @@ app.get("/test", async (req, res) => {
 app.get("/test-voice", async (req, res) => {
   try {
     const out = path.join("outputs", "test-voice.mp3");
-    await generateVoiceover("Hola, esta es una prueba de la voz para los reels del equipo.", out);
+    const progressLog = [];
+    await generateVoiceover(
+      "Hola, esta es una prueba de la voz para los reels del equipo.",
+      out,
+      msg => progressLog.push(msg)
+    );
     res.json({
       ok: true,
       voice: voiceEngineName,
+      progressLog,
       audio: "/download/test-voice.mp3",
       nota: "Abre el link 'audio' para escuchar la voz"
     });
