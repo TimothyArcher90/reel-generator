@@ -21,6 +21,8 @@ const ltxSpace = require("./pipeline/ltxSpace");
 const pexels = require("./pipeline/pexels");
 const pollinationsImage = require("./pipeline/pollinationsImage");
 const subtitles = require("./pipeline/subtitles");
+const { qaScript } = require("./pipeline/qaScript");
+const { qaImage } = require("./pipeline/qaImage");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 
 // Motor de video: Higgsfield Cloud (pago, saldo agotado 2026-07-06) vs
@@ -76,7 +78,21 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
     }
 
     try {
-      const buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
+      let buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
+      // Control de calidad automático (barato, Haiku con visión): rechaza
+      // imágenes borrosas/genéricas/fuera de tema antes de aceptarlas en el
+      // reel — pedido explícito del usuario. Un solo reintento con seed nueva
+      // (generateImage ya randomiza el seed en cada llamada) si falla el QA;
+      // si el QA mismo no está disponible (timeout/error), se acepta la
+      // imagen tal cual en vez de bloquear el reel por un chequeo extra.
+      try {
+        const captionForQA = (typeof prompts[i] === "object" && prompts[i].caption) || videoPrompt;
+        let qa = await withTimeout(qaImage(buffer, captionForQA), 20000, "QA imagen timeout");
+        if (!qa.pass) {
+          onProgress(`Clip ${i + 1}/${prompts.length}: imagen IA rechazada por control de calidad (${qa.reason}) — regenerando...`);
+          buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
+        }
+      } catch (e) { /* QA no disponible — seguir con la imagen ya generada */ }
       urls.push({ type: "image", buffer });
       onProgress(`Clip ${i + 1}/${prompts.length}: listo (imagen IA)`);
       continue;
@@ -220,7 +236,23 @@ async function runPipeline(jobId, text, baseFilename) {
   // Step 1 — Script
   upd(jobId, { step: 1, statusMsg: "Claude generando guion..." });
   log(jobId, "[1/4] Generando guion...");
-  const script = await withTimeout(generateScript(text), 90000, "Script timeout");
+  let script = await withTimeout(generateScript(text), 90000, "Script timeout");
+  // Control de calidad automático (pedido explícito del usuario: que una IA
+  // barata confirme que el guion cumple las reglas antes de gastar en video/
+  // voz, y si no, que ordene regenerar). Un solo reintento con la corrección
+  // puntual — si sigue fallando, se sigue con el mejor intento disponible en
+  // vez de loopear indefinidamente y gastar de más.
+  try {
+    const qa = await withTimeout(qaScript(script), 30000, "QA guion timeout");
+    if (!qa.pass) {
+      log(jobId, `Control de calidad: guion rechazado (${(qa.issues || []).join("; ")}) — regenerando...`);
+      script = await withTimeout(generateScript(text, qa.fix_instruction), 90000, "Script timeout (regeneración)");
+    } else {
+      log(jobId, "Control de calidad: guion aprobado.");
+    }
+  } catch (e) {
+    log(jobId, `Control de calidad del guion no disponible (${e.message.slice(0, 80)}) — se sigue con el guion generado.`);
+  }
   // Tope de segmentos de GUION (no de clips visuales — eso lo limita
   // MAX_TOTAL_CLIPS más abajo, ya con el render por concat demuxer O(N)
   // verificado estable hasta 20 clips). El nuevo prompt de Director Creativo
@@ -252,10 +284,10 @@ async function runPipeline(jobId, text, baseFilename) {
   // concreta derivada del contenido de cada segmento). Fallback al formato viejo
   // (imagePrompts/motionPrompts) por si un guion antiguo quedara en cola.
   const segmentPrompts = (script.videoPrompts && script.stockQueries)
-    ? script.videoPrompts.map((v, i) => ({ video: v, stock: script.stockQueries[i] || v }))
+    ? script.videoPrompts.map((v, i) => ({ video: v, stock: script.stockQueries[i] || v, caption: script.captions[i] }))
     : (script.imagePrompts && script.motionPrompts)
-      ? script.imagePrompts.map((img, i) => ({ video: `${img}. ${script.motionPrompts[i] || ""}`, stock: img }))
-      : (script.videoPrompts || []).map(v => ({ video: v, stock: v }));
+      ? script.imagePrompts.map((img, i) => ({ video: `${img}. ${script.motionPrompts[i] || ""}`, stock: img, caption: script.captions[i] }))
+      : (script.videoPrompts || []).map((v, i) => ({ video: v, stock: v, caption: script.captions[i] }));
 
   // RITMO (pedido explícito del usuario, no negociable — ver memoria
   // project_reel_video_quality_bar): cada clip visual dura MÁX 4s. Antes, un

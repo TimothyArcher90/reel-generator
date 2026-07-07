@@ -2,7 +2,13 @@ const Anthropic = require("@anthropic-ai/sdk");
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-async function generateScript(articleText) {
+// correction: si el QA (pipeline/qaScript.js) rechazó un intento anterior,
+// se pasa aquí su fix_instruction para que Claude corrija puntualmente en
+// vez de repetir el mismo guion mediocre.
+async function generateScript(articleText, correction = null) {
+  const correctionBlock = correction
+    ? `\n\n⚠️ CORRECCIÓN OBLIGATORIA (un control de calidad automático rechazó tu intento anterior): ${correction}\n`
+    : "";
   const response = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 6000,
@@ -76,6 +82,7 @@ RESPONDE SOLO con este JSON (sin markdown):
 
 captions, videoPrompts y stockQueries deben tener el MISMO número de elementos, y cada uno del segmento i debe corresponder al mismo segmento i.
 
+${correctionBlock}
 ARTÍCULO:
 ${articleText.slice(0, 8000)}`
     }]
