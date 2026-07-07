@@ -8,9 +8,10 @@ async function generateScript(articleText) {
     max_tokens: 6000,
     messages: [{
       role: "user",
-      content: `Eres director creativo de una productora premium de contenido intelectual/editorial (nivel: reels de Bloomberg, a16z, Aeon, Kurzgesagt, Not Boring). Creas reels que detienen el scroll en 1 segundo.
+      content: `### ROL DEL SISTEMA
+Eres el Director Creativo en Jefe de una agencia especializada en videos virales de formato corto (Reels/Shorts/TikToks) estilo "Faceless" (sin rostro). Tu especialidad es la retención absoluta mediante dinamismo visual. Combinas el minimalismo analítico de Dan Koe con la estética inmersiva de documentales de geopolítica y finanzas (estilo Vox o MagnatesMedia). Creas reels que detienen el scroll en 1 segundo, con el rigor de Bloomberg/a16z/Aeon/Kurzgesagt/Not Boring.
 
-A partir del artículo, crea un guion de reel VIRAL de entre 25 y 40 segundos EN TOTAL — límite duro, nunca lo excedas ni te quedes corto. Dentro de ese rango, usa entre 6 y 8 segmentos (cada uno de 4-6 segundos hablados) — prioriza las ideas MÁS fuertes del artículo, descarta todo lo secundario sin piedad.
+A partir del artículo, crea un guion de reel VIRAL de entre 25 y 40 segundos EN TOTAL — límite duro, nunca lo excedas ni te quedes corto. Dentro de ese rango, usa entre 8 y 12 segmentos CORTOS (cada uno de 2-4 segundos hablados, NUNCA más) — prioriza las ideas MÁS fuertes del artículo, descarta todo lo secundario sin piedad. Segmentos cortos = más cortes visuales = más retención.
 
 ESTRATEGIA VIRAL (sin dañar la marca — nada de clickbait engañoso ni sensacionalismo barato; la marca es seria, precisa, con autoridad):
 - Los primeros 1-2 segundos deben crear un "pattern interrupt": una afirmación que contradiga lo obvio o genere una pregunta inmediata
@@ -26,26 +27,29 @@ IDIOMAS — REGLA ESTRICTA:
 
 REGLAS DEL GUION (español):
 - Segmento 1 = HOOK: una frase que genere tensión inmediata o rompa una creencia. Nada de introducciones.
-- Máximo 30 palabras por segmento
+- Máximo 20 palabras por segmento (son segmentos cortos, de 2-4s)
 - Lenguaje de pensador preciso, provocador, cero relleno
 - Último segmento: cierre que RESUELVE la tensión del hook, con un giro final que deja pensando — nunca un corte abrupto
 - Usa **negritas** para 1-3 palabras clave por segmento
 
 ═══════════════════════════════════════════════════════════════════
-REGLAS VISUALES — LO MÁS IMPORTANTE: EL VISUAL DEBE SALIR DEL CONTENIDO REAL
+REGLAS DE DIRECCIÓN VISUAL (ESTRICTAS) — LO MÁS IMPORTANTE
 ═══════════════════════════════════════════════════════════════════
-El error más grave posible es mostrar imágenes que NO tienen relación con lo que se está diciendo. Si el texto habla de ADN, muestra ADN/células/genoma; si habla de mercados, muestra gráficos/dinero; si habla de filosofía o cosmos, muestra cosmos/naturaleza/abstracto. NUNCA fuerces un tema tecnológico si el contenido no lo es. El sujeto visual de cada segmento LO DICTA el contenido de ESE segmento, no una lista fija.
+1. PROHIBIDO LO ESTÁTICO: jamás describas "una imagen de X" o "una foto de X". Cada videoPrompt debe describir una ANIMACIÓN, un MOVIMIENTO DE CÁMARA (zoom in/out, panning, parallax, dolly, orbit) o un DISEÑO DE INFORMACIÓN DINÁMICO (un gráfico que se dibuja, una línea que avanza, un número que sube). Todo se mueve, nada es una foto quieta.
+2. ESTÉTICA VISUAL: prioriza mapas vectoriales, gráficos de líneas estilo neón, recortes 3D (paper-cut / 3D cutout), texturas de papel antiguo, gráficos de velas financieras (candlestick charts), diagramas minimalistas — combinado con macro-fotografía cinematográfica cuando el contenido sea más orgánico (ciencia, naturaleza, biología). Nunca fuerces un tema tecnológico/financiero si el contenido no lo es: el sujeto visual de cada segmento LO DICTA el contenido de ESE segmento.
+3. RITMO (PACING): cada segmento (y su clip visual) representa como máximo 2-4 segundos — el cambio constante mantiene la atención. Nunca un solo plano se sostiene más de esa ventana.
+4. El error más grave posible sigue siendo mostrar visuales que NO tienen relación con lo que se está diciendo — la precisión temática es innegociable incluso con esta estética más dinámica.
 
 Para CADA segmento genera DOS campos visuales, ambos en inglés:
 
-1) videoPrompts[i] — descripción cinematográfica rica (para un modelo de IA de video):
+1) videoPrompts[i] — descripción cinematográfica de una ESCENA EN MOVIMIENTO (para un modelo de IA de video), siguiendo las reglas de arriba:
    - Tipo de plano (Extreme close-up / Close-up / Medium / Wide / Aerial drone / Low-angle)
-   - El SUJETO CONCRETO que representa la idea de ESE segmento (sale del contenido, no de una lista)
+   - El SUJETO CONCRETO que representa la idea de ESE segmento (sale del contenido, no de una lista) descrito como algo que se anima/dibuja/mueve
    - Una fuente de luz descrita literalmente
-   - Movimiento de cámara (camera pushes in / pulls back / orbits / glides / tilts up) + un movimiento interno breve
-   - Cierra con: "cinematic lighting, high contrast, dark editorial aesthetic with a warm gold accent, sharp focus, 9:16 vertical, photorealistic, 8k, no text, no logos"
+   - Movimiento de cámara explícito (camera pushes in / pulls back / orbits / glides / tilts up / parallax pan) + qué se anima dentro de la escena (una línea que se traza, partículas que fluyen, un gráfico que crece)
+   - Cierra con: "cinematic lighting, high contrast, dark editorial aesthetic with a warm gold accent, sharp focus, 9:16 vertical, photorealistic, 8k, no text, no logos, in motion, animated"
 
-2) stockQueries[i] — 2 a 4 palabras EN INGLÉS, CONCRETAS Y COMUNES, que un banco de video de stock (tipo Pexels) SÍ tenga. Debe describir un objeto/escena real y filmable que represente la idea del segmento. Piensa: "¿qué escribiría alguien en un buscador de video de stock para encontrar un clip que ilustre esta frase?".
+2) stockQueries[i] — 2 a 4 palabras EN INGLÉS, CONCRETAS Y COMUNES, que un banco de video de stock (tipo Pexels) SÍ tenga — este es el respaldo si la IA de video falla, así que debe describir un objeto/escena real y filmable (no necesita ser el diseño vectorial/neón, solo temáticamente relacionado). Piensa: "¿qué escribiría alguien en un buscador de video de stock para encontrar un clip que ilustre esta frase?".
    Ejemplos de buenos stockQueries según el tema:
      * segmento sobre ADN/genoma → "dna double helix"
      * segmento sobre células/biología → "cells under microscope"

@@ -220,10 +220,11 @@ async function runPipeline(jobId, text, baseFilename) {
   upd(jobId, { step: 1, statusMsg: "Claude generando guion..." });
   log(jobId, "[1/4] Generando guion...");
   const script = await withTimeout(generateScript(text), 90000, "Script timeout");
-  // Tope duro de 8 segmentos SIN IMPORTAR lo que Claude devuelva — con más de eso,
-  // Railway se quedaba sin memoria a mitad del render (12 clips reales tumbaba el
-  // proceso completo, perdiendo el job). 8 clips es el punto probado estable.
-  const MAX_SEGMENTS = 8;
+  // Tope de segmentos de GUION (no de clips visuales — eso lo limita
+  // MAX_TOTAL_CLIPS más abajo, ya con el render por concat demuxer O(N)
+  // verificado estable hasta 20 clips). El nuevo prompt de Director Creativo
+  // pide 8-12 segmentos cortos (2-4s), así que el tope sube de 8 a 12.
+  const MAX_SEGMENTS = 12;
   if (script.captions.length > MAX_SEGMENTS) {
     script.captions = script.captions.slice(0, MAX_SEGMENTS);
     if (script.videoPrompts) script.videoPrompts = script.videoPrompts.slice(0, MAX_SEGMENTS);
@@ -266,7 +267,7 @@ async function runPipeline(jobId, text, baseFilename) {
   // hagan falta para cubrir ese segmento, todos con el MISMO prompt visual del
   // segmento (así el contenido se sigue viendo 100% alineado al guion) — el
   // ritmo de cortes ahora lo marca el guion real, no un valor fijo arbitrario.
-  const MAX_CLIP_SECONDS = 4;
+  const MAX_CLIP_SECONDS = 3; // "ninguna escena debe durar más de 3 segundos" — regla estricta del prompt de Director Creativo
   const MAX_TOTAL_CLIPS = 20; // techo de seguridad: un guion inusualmente largo no debe disparar decenas de llamadas
   const totalCaptionChars = script.captions.reduce((sum, c) => sum + c.length, 0) || 1;
   const visualPrompts = [];
