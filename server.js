@@ -149,6 +149,17 @@ async function runPipeline(jobId, text, baseFilename) {
   upd(jobId, { step: 1, statusMsg: "Claude generando guion..." });
   log(jobId, "[1/4] Generando guion...");
   const script = await withTimeout(generateScript(text), 90000, "Script timeout");
+  // Tope duro de 8 segmentos SIN IMPORTAR lo que Claude devuelva — con más de eso,
+  // Railway se quedaba sin memoria a mitad del render (12 clips reales tumbaba el
+  // proceso completo, perdiendo el job). 8 clips es el punto probado estable.
+  const MAX_SEGMENTS = 8;
+  if (script.captions.length > MAX_SEGMENTS) {
+    script.captions = script.captions.slice(0, MAX_SEGMENTS);
+    if (script.videoPrompts) script.videoPrompts = script.videoPrompts.slice(0, MAX_SEGMENTS);
+    if (script.stockQueries) script.stockQueries = script.stockQueries.slice(0, MAX_SEGMENTS);
+    if (script.imagePrompts) script.imagePrompts = script.imagePrompts.slice(0, MAX_SEGMENTS);
+    if (script.motionPrompts) script.motionPrompts = script.motionPrompts.slice(0, MAX_SEGMENTS);
+  }
   const N = script.captions.length;
   log(jobId, `Guion listo: "${script.title}" — ${N} segmentos`);
 

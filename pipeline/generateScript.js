@@ -10,7 +10,7 @@ async function generateScript(articleText) {
       role: "user",
       content: `Eres director creativo de una productora premium de contenido intelectual/editorial (nivel: reels de Bloomberg, a16z, Aeon, Kurzgesagt, Not Boring). Creas reels que detienen el scroll en 1 segundo.
 
-A partir del artículo, crea un guion de reel VIRAL de entre 30 y 60 segundos EN TOTAL — límite duro, nunca lo excedas ni te quedes corto. Dentro de ese rango, usa MUCHOS segmentos CORTOS (normalmente entre 9 y 14), cada uno de 3-5 segundos hablados — el ritmo rápido de corte sostiene la retención; un plano de más de 5 segundos se siente lento. Prioriza las ideas más fuertes del artículo, descarta lo secundario.
+A partir del artículo, crea un guion de reel VIRAL de entre 25 y 40 segundos EN TOTAL — límite duro, nunca lo excedas ni te quedes corto. Dentro de ese rango, usa entre 6 y 8 segmentos (cada uno de 4-6 segundos hablados) — prioriza las ideas MÁS fuertes del artículo, descarta todo lo secundario sin piedad.
 
 ESTRATEGIA VIRAL (sin dañar la marca — nada de clickbait engañoso ni sensacionalismo barato; la marca es seria, precisa, con autoridad):
 - Los primeros 1-2 segundos deben crear un "pattern interrupt": una afirmación que contradiga lo obvio o genere una pregunta inmediata
