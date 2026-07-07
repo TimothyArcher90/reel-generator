@@ -56,7 +56,14 @@ function probeDuration(filePath) {
 
 // clips: array de { path, type } — type "video" (clip animado DoP) o "image"
 // (fallback cuando DoP falló tras reintentar: se usa la imagen fija con zoom).
-async function renderVideo({ clips, audioFile, duration, outPath, onProgress = () => {} }) {
+// Escapa una ruta para usarla dentro del argumento de un filtro de ffmpeg
+// (los ':' separan opciones de filtro y deben ir escapados; ffmpeg también
+// prefiere '/' sobre '\' incluso en rutas de estilo Windows).
+function escapeForFilter(p) {
+  return p.replace(/\\/g, "/").replace(/:/g, "\\:");
+}
+
+async function renderVideo({ clips, audioFile, duration, outPath, assPath, fontsDir, onProgress = () => {} }) {
   const N = clips.length;
   const segDur = Math.max(3, duration / N);
   const workDir = path.dirname(clips[0].path);
@@ -185,9 +192,15 @@ async function renderVideo({ clips, audioFile, duration, outPath, onProgress = (
   const closeFade    = 1.0;
   onProgress("Extendiendo y cerrando el video...");
   const extended = path.join(workDir, "extended.mp4");
+  // Subtítulos incrustados (pedido explícito del usuario, estilo template:
+  // serif dorado/blanco) — se aplican en este mismo paso porque ya re-codifica
+  // el video completo, así no hace falta una pasada extra solo para el texto.
+  const subtitlesFilter = assPath
+    ? `,subtitles=${escapeForFilter(assPath)}${fontsDir ? `:fontsdir=${escapeForFilter(fontsDir)}` : ""}`
+    : "";
   await run([
     "-y", "-i", acc,
-    "-vf", `tpad=stop_mode=clone:stop_duration=${extendNeeded.toFixed(2)},fade=t=out:st=${Math.max(0, targetDur - closeFade).toFixed(2)}:d=${closeFade}`,
+    "-vf", `tpad=stop_mode=clone:stop_duration=${extendNeeded.toFixed(2)},fade=t=out:st=${Math.max(0, targetDur - closeFade).toFixed(2)}:d=${closeFade}${subtitlesFilter}`,
     "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
     extended
   ], "extender + cierre", 90000);

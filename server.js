@@ -20,6 +20,7 @@ const { generateAllClips, generateVoiceoverHiggsfield, GUILLERMO_VOICE_ID } = re
 const ltxSpace = require("./pipeline/ltxSpace");
 const pexels = require("./pipeline/pexels");
 const pollinationsImage = require("./pipeline/pollinationsImage");
+const subtitles = require("./pipeline/subtitles");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 
 // Motor de video: Higgsfield Cloud (pago, saldo agotado 2026-07-06) vs
@@ -270,9 +271,12 @@ async function runPipeline(jobId, text, baseFilename) {
   const MAX_CLIP_SECONDS = 3; // "ninguna escena debe durar más de 3 segundos" — regla estricta del prompt de Director Creativo
   const MAX_TOTAL_CLIPS = 20; // techo de seguridad: un guion inusualmente largo no debe disparar decenas de llamadas
   const totalCaptionChars = script.captions.reduce((sum, c) => sum + c.length, 0) || 1;
+  // Duración estimada de cada segmento de guion (para el ritmo de clips Y para
+  // sincronizar los subtítulos incrustados con lo que realmente se está diciendo).
+  const segmentDurations = script.captions.map(c => Math.max(2, duration * (c.length / totalCaptionChars)));
   const visualPrompts = [];
   segmentPrompts.forEach((p, i) => {
-    const estSegDur = Math.max(2, duration * (script.captions[i].length / totalCaptionChars));
+    const estSegDur = segmentDurations[i];
     const nSubClips = Math.max(1, Math.round(estSegDur / MAX_CLIP_SECONDS));
     for (let k = 0; k < nSubClips; k++) visualPrompts.push(p);
   });
@@ -318,9 +322,15 @@ async function runPipeline(jobId, text, baseFilename) {
   upd(jobId, { step: 4, statusMsg: "Renderizando MP4 con ffmpeg..." });
   log(jobId, "[4/4] Renderizando con ffmpeg...");
   const outMp4 = path.join("outputs", `${jobId}.mp4`);
+  // Subtítulos incrustados estilo template (serif Playfair Display, palabra
+  // clave **así** en dorado cursivo) — sincronizados con la duración estimada
+  // real de cada segmento del guion (mismo cálculo que ya rige el ritmo visual).
+  const assPath = path.join(workDir, "subs.ass");
+  fs.writeFileSync(assPath, subtitles.buildAss({ captions: script.captions, segmentDurations }));
   await withTimeout(
     renderVideo({
       clips: clipFiles, audioFile, duration, outPath: outMp4,
+      assPath, fontsDir: subtitles.FONTS_DIR,
       onProgress: msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }
     }),
     Math.max(300000, N * 50000), "ffmpeg render timeout" // ya con timeout duro por comando adentro, no hace falta tanto margen aquí
