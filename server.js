@@ -79,7 +79,15 @@ const useHiggsfieldVoice = false;
 // sigue fallando con 401/quota_exceeded. Forzado a Edge-TTS gratis hasta resolver eso
 // aparte — no depende de borrar las variables en Railway.
 const useElevenLabs = false;
-const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : "Edge-TTS (gratis, genérica)";
+// Clonación de voz REAL de Guillermo, gratis, vía el Space público de Hugging
+// Face "myshell-ai/OpenVoiceV2" (ver pipeline/voiceCloneOpenVoice.js — contrato
+// de API verificado en vivo, no adivinado). Corre en hardware cpu-basic
+// (sin GPU) compartido por toda la comunidad, así que la latencia real varía;
+// por eso siempre va con timeout acotado y cae a Edge-TTS si no responde a
+// tiempo, igual que ya se hace con los clips de video/imagen — el pipeline
+// NUNCA debe poder colgarse por esto.
+const useOpenVoiceClone = true;
+const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : useOpenVoiceClone ? "OpenVoice (clon de Guillermo, gratis)" : "Edge-TTS (gratis, genérica)";
 
 async function generateVoiceoverHiggsfieldToFile(text, outputPath) {
   const url = await generateVoiceoverHiggsfield(text, GUILLERMO_VOICE_ID);
@@ -87,9 +95,24 @@ async function generateVoiceoverHiggsfieldToFile(text, outputPath) {
   return outputPath;
 }
 
+const voiceCloneOpenVoice = require("./pipeline/voiceCloneOpenVoice");
+async function generateVoiceoverOpenVoiceWithFallback(text, outputPath, onProgress = () => {}) {
+  try {
+    onProgress("Clonando voz de Guillermo (OpenVoice, gratis)...");
+    const url = await withTimeout(voiceCloneOpenVoice.cloneVoice(text), 90000, "OpenVoice timeout");
+    await voiceCloneOpenVoice.downloadTo(url, outputPath);
+    onProgress("Voz clonada lista.");
+  } catch (e) {
+    // Space gratuito compartido, cpu-basic — puede tardar demasiado o fallar.
+    // Nunca debe tumbar el reel: cae a Edge-TTS (siempre funciona, sin cuota).
+    onProgress(`OpenVoice no respondió a tiempo (${e.message}) — usando Edge-TTS de respaldo...`);
+    await edgeTts.generateVoiceover(text, outputPath);
+  }
+}
+
 const { generateVoiceover } = useHiggsfieldVoice
   ? { generateVoiceover: generateVoiceoverHiggsfieldToFile }
-  : (useElevenLabs ? elevenLabs : edgeTts);
+  : (useElevenLabs ? elevenLabs : (useOpenVoiceClone ? { generateVoiceover: generateVoiceoverOpenVoiceWithFallback } : edgeTts));
 const { renderVideo }       = require("./pipeline/renderVideo");
 
 const app  = express();
@@ -191,7 +214,10 @@ async function runPipeline(jobId, text, baseFilename) {
   upd(jobId, { step: 2, statusMsg: "Generando voz..." });
   log(jobId, `[2/4] Generando voz (${voiceEngineName})...`);
   const audioFile = path.join(workDir, "audio.mp3");
-  await withTimeout(generateVoiceover(script.voiceover, audioFile), 120000, "Voiceover timeout");
+  await withTimeout(
+    generateVoiceover(script.voiceover, audioFile, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
+    150000, "Voiceover timeout"
+  );
   const duration = await getAudioDuration(audioFile);
   log(jobId, `Voz lista — ${duration}s`);
 
