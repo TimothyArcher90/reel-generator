@@ -12,13 +12,29 @@ try {
 }
 console.log("ffmpeg en uso:", ffmpegPath);
 
-function run(args, label) {
+// Timeout DURO por comando individual de ffmpeg — antes un solo comando colgado
+// (ej. un archivo de Pexels con un códec/contenedor raro) se quedaba corriendo
+// para siempre; solo existía un timeout general de 10 minutos en server.js que
+// además NO mataba el proceso hijo, solo dejaba de esperarlo desde JS. Ahora cada
+// paso individual tiene 45s: si no termina, se mata el proceso y se sabe EXACTAMENTE
+// cuál paso fue el culpable (el error lo dice), en vez de un cuelgue silencioso.
+function run(args, label, timeoutMs = 45000) {
   return new Promise((resolve, reject) => {
     const ff = spawn(ffmpegPath, args);
     let stderr = "";
+    let settled = false;
+    const killer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      ff.kill("SIGKILL");
+      reject(new Error(`${label} TIMEOUT (>${timeoutMs / 1000}s, proceso matado): ` + stderr.slice(-500)));
+    }, timeoutMs);
     ff.stderr.on("data", d => { stderr += d.toString(); });
-    ff.on("error", reject);
+    ff.on("error", e => { if (settled) return; settled = true; clearTimeout(killer); reject(e); });
     ff.on("close", code => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(killer);
       if (code === 0) resolve();
       else reject(new Error(`${label} failed (code ${code}): ` + stderr.slice(-800)));
     });
@@ -40,7 +56,7 @@ function probeDuration(filePath) {
 
 // clips: array de { path, type } — type "video" (clip animado DoP) o "image"
 // (fallback cuando DoP falló tras reintentar: se usa la imagen fija con zoom).
-async function renderVideo({ clips, audioFile, duration, outPath }) {
+async function renderVideo({ clips, audioFile, duration, outPath, onProgress = () => {} }) {
   const N = clips.length;
   const segDur = Math.max(3, duration / N);
   const workDir = path.dirname(clips[0].path);
@@ -114,6 +130,7 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
       args.push("-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", part);
     }
 
+    onProgress(`Procesando clip ${i + 1}/${N} (ffmpeg)...`);
     await run(args, `clip ${i + 1}`);
     const partDur = probeDuration(part);
     if (partDur < segDur - 0.5) {
@@ -132,10 +149,11 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
   //    ellos es un corte duro limpio (estilo reel rápido) y accDur es exacto.
   // El concat demuxer resuelve rutas relativas al directorio del propio archivo
   // de lista; por eso se escriben solo los nombres base (los parts están en workDir).
+  onProgress("Uniendo todos los clips (concat)...");
   const listPath = path.join(workDir, "concat.txt");
   fs.writeFileSync(listPath, parts.map(p => `file '${path.basename(p)}'`).join("\n"));
   const acc = path.join(workDir, "concat.mp4");
-  await run(["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", acc], "concat clips");
+  await run(["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", acc], "concat clips", 60000);
   let accDur = probeDuration(acc);
   if (accDur < N * segDur - 1) {
     throw new Error(`Concat: quedó en ${accDur.toFixed(1)}s, se esperaban ~${(N * segDur).toFixed(1)}s`);
@@ -147,16 +165,18 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
   const targetDur   = duration + tailAfterVoice;
   const extendNeeded = Math.max(0, targetDur - accDur);
   const closeFade    = 1.0;
+  onProgress("Extendiendo y cerrando el video...");
   const extended = path.join(workDir, "extended.mp4");
   await run([
     "-y", "-i", acc,
     "-vf", `tpad=stop_mode=clone:stop_duration=${extendNeeded.toFixed(2)},fade=t=out:st=${Math.max(0, targetDur - closeFade).toFixed(2)}:d=${closeFade}`,
     "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
     extended
-  ], "extender + cierre");
+  ], "extender + cierre", 90000);
 
   // 4. Mux con la voz — audio con padding de silencio, duración exacta forzada
   //    (nada de -shortest, que era lo que cortaba la narración antes de tiempo).
+  onProgress("Mezclando audio final...");
   await run([
     "-y", "-i", extended, "-i", audioFile,
     "-filter_complex", "[1:a]apad[a]",
@@ -165,7 +185,7 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
     "-c:a", "aac", "-ar", "44100", "-b:a", "128k",
     "-t", targetDur.toFixed(2),
     outPath
-  ], "mux audio");
+  ], "mux audio", 60000);
 
   // 5. Verificación final — si el video real quedó corto vs el audio, fallar RUIDOSO
   //    en vez de entregar (y cobrar) un reel roto como si estuviera "completo".

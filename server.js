@@ -208,8 +208,11 @@ async function runPipeline(jobId, text, baseFilename) {
   log(jobId, "[4/4] Renderizando con ffmpeg...");
   const outMp4 = path.join("outputs", `${jobId}.mp4`);
   await withTimeout(
-    renderVideo({ clips: clipFiles, audioFile, duration, outPath: outMp4 }),
-    Math.max(600000, N * 60000), "ffmpeg render timeout" // más margen; escala con N (procesa + N-1 merges xfade)
+    renderVideo({
+      clips: clipFiles, audioFile, duration, outPath: outMp4,
+      onProgress: msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }
+    }),
+    Math.max(300000, N * 50000), "ffmpeg render timeout" // ya con timeout duro por comando adentro, no hace falta tanto margen aquí
   );
 
   upd(jobId, {
