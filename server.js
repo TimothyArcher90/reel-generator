@@ -9,6 +9,7 @@ const elevenLabs   = require("./pipeline/elevenlabs");
 const { generateAllClips, generateVoiceoverHiggsfield, GUILLERMO_VOICE_ID } = require("./pipeline/higgsfieldCloud");
 const ltxSpace = require("./pipeline/ltxSpace");
 const pexels = require("./pipeline/pexels");
+const pollinationsImage = require("./pipeline/pollinationsImage");
 const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 
 // Motor de video: Higgsfield Cloud (pago, saldo agotado 2026-07-06) vs
@@ -29,17 +30,35 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
     const videoPrompt = typeof p === "string" ? p : p.video;
     const stockQuery  = typeof p === "string" ? p : (p.stock || p.video);
     onProgress(`Clip ${i + 1}/${prompts.length}: generando video (LTX-Video, gratis)...`);
-    let videoUrl;
     try {
-      videoUrl = await ltxSpace.generateClip(videoPrompt, segDurSeconds);
+      const videoUrl = await ltxSpace.generateClip(videoPrompt, segDurSeconds);
+      urls.push({ type: "video", url: videoUrl });
+      onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
+      continue;
     } catch (e) {
-      // LTX-Video (cuota gratis compartida) puede fallar por cuota/caída — en vez
-      // de tirar el reel, cae a un video de stock real de Pexels buscado con la
-      // consulta DERIVADA DEL CONTENIDO de ese segmento (no un tema fijo), así el
-      // clip es relevante a lo que se dice y el reel SIEMPRE se completa.
-      onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota — video de stock de Pexels ("${stockQuery}")`);
-      videoUrl = await pexels.searchVideo(stockQuery);
+      // LTX-Video (cuota gratis compartida ZeroGPU) falló por cuota/caída.
     }
+    // Respaldo 1: IMAGEN generada por IA (Pollinations, gratis, sin API key) a
+    // partir del MISMO videoPrompt cinematográfico del segmento — a diferencia
+    // de un banco de stock, el resultado siempre está alineado al contenido real
+    // (el usuario reportó que el fallback anterior a Pexels traía clips
+    // genéricos/aburridos sin relación con el guion). Es también un servicio
+    // gratuito compartido con latencia variable (2-90s+), por eso va con
+    // timeout acotado — si no responde a tiempo, cae al respaldo final de Pexels
+    // en vez de colgar el pipeline.
+    try {
+      onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota — generando imagen IA (Pollinations, gratis)...`);
+      const buffer = await pollinationsImage.generateImage(videoPrompt, 45000);
+      urls.push({ type: "image", buffer });
+      onProgress(`Clip ${i + 1}/${prompts.length}: listo (imagen IA)`);
+      continue;
+    } catch (e) {
+      // Pollinations tardó demasiado o falló — último respaldo: stock real de
+      // Pexels con la consulta derivada del contenido, para que el reel SIEMPRE
+      // se complete sin colgarse.
+    }
+    onProgress(`Clip ${i + 1}/${prompts.length}: imagen IA sin respuesta — video de stock de Pexels ("${stockQuery}")`);
+    const videoUrl = await pexels.searchVideo(stockQuery);
     urls.push({ type: "video", url: videoUrl });
     onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
   }
@@ -197,9 +216,15 @@ async function runPipeline(jobId, text, baseFilename) {
     const clip = clipUrls[i];
     const isImage = clip.type === "image";
     const dest = path.join(workDir, `clip${i + 1}${isImage ? ".jpg" : ".mp4"}`);
-    await downloadFile(clip.url, dest);
+    if (clip.buffer) {
+      // Imagen IA (Pollinations) ya generada en memoria — escribir directo,
+      // sin volver a pedirla por HTTP (ahorra otra ronda de latencia variable).
+      fs.writeFileSync(dest, clip.buffer);
+    } else {
+      await downloadFile(clip.url, dest);
+    }
     clipFiles.push({ path: dest, type: clip.type });
-    log(jobId, `Clip ${i + 1}/${N} descargado${isImage ? " (imagen fija, DoP falló)" : ""}`);
+    log(jobId, `Clip ${i + 1}/${N} descargado${isImage ? " (imagen IA generada del guion)" : ""}`);
     upd(jobId, { statusMsg: `Descargando clips... ${i + 1}/${N}` });
   }
 
