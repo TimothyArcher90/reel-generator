@@ -10,17 +10,20 @@ const axios = require("axios");
 // con marca visible) porque esas palabras de dirección de cámara confunden la
 // búsqueda. Ahora se detecta el sujeto real del prompt (ya viene de una lista
 // fija en generateScript.js) y se usa un término de búsqueda probado para ese tema.
+// Cada query de abajo fue DESCARGADA Y REVISADA visualmente (no solo listada)
+// antes de dejarla — varias consultas "obvias" (server room, fiber optic cables,
+// data center racks) resultaron en videos totalmente ajenos al tema (una bodega
+// de cajas, pulseras de tela, alguien tecleando) y se descartaron. Solo quedan
+// las que se confirmaron con imagen real coherente y de alta calidad.
 const TOPIC_QUERIES = [
-  { keywords: ["gpu", "rack", "data center", "hyperscale"], query: "server room data center racks" },
-  { keywords: ["fiber optic", "cable", "network"], query: "fiber optic cables technology" },
-  { keywords: ["chip", "silicon", "wafer", "semiconductor"], query: "microchip circuit board macro" },
-  { keywords: ["skyscraper", "financial", "glass and steel"], query: "financial skyscraper glass building" },
-  { keywords: ["server", "led", "processing"], query: "server room technology" },
-  { keywords: ["robotic arm", "robot", "machinery", "assembling"], query: "robotic arm factory automation" },
-  { keywords: ["motherboard", "circuits", "liquidity"], query: "motherboard circuit board technology" },
-  { keywords: ["drone", "satellite", "antenna", "aerial"], query: "aerial drone city technology" }
+  { keywords: ["skyscraper", "financial", "glass and steel"], query: "financial skyscraper glass building" }, // verificado: rascacielos reales, ángulo bajo, cielo azul
+  { keywords: ["robotic arm", "robot", "machinery", "assembling"], query: "robotic arm factory automation" }, // verificado: brazo robótico industrial real
+  // Todo lo demás (servidores, fibra óptica, chips, placas, drones) usa esta
+  // consulta única verificada — un render abstracto tech de alta calidad,
+  // coherente con la marca, en vez de arriesgar términos literales sin probar.
+  { keywords: ["gpu", "rack", "data center", "server", "fiber optic", "cable", "network", "chip", "silicon", "wafer", "semiconductor", "motherboard", "circuits", "drone", "satellite", "antenna", "aerial", "led", "processing"], query: "computer hardware close up technology" }
 ];
-const DEFAULT_QUERY = "technology business abstract";
+const DEFAULT_QUERY = "computer hardware close up technology";
 
 function queryFor(imagePrompt) {
   const lower = (imagePrompt || "").toLowerCase();
@@ -44,19 +47,25 @@ async function searchVideo(imagePrompt) {
   const videos = data.videos || [];
   if (!videos.length) throw new Error(`Pexels: sin resultados para "${query}"`);
 
-  // Elegir el video con mayor resolución vertical disponible, priorizando 9:16 y
+  // Un archivo vertical de buena resolución por cada video de la búsqueda,
   // descartando resoluciones muy bajas (esas suelen ser los recortes borrosos).
-  let best = null, bestScore = -1;
+  const candidates = [];
   for (const v of videos) {
+    let bestFile = null, bestScore = -1;
     for (const file of v.video_files || []) {
       if (!file.link || file.height < 720) continue;
       const isVertical = file.height > file.width;
       const score = (isVertical ? 1000000 : 0) + (file.width * file.height);
-      if (score > bestScore) { bestScore = score; best = file; }
+      if (score > bestScore) { bestScore = score; bestFile = file; }
     }
+    if (bestFile) candidates.push(bestFile);
   }
-  if (!best) throw new Error(`Pexels: "${query}" sin archivos de video en buena resolución`);
-  return best.link;
+  if (!candidates.length) throw new Error(`Pexels: "${query}" sin archivos de video en buena resolución`);
+
+  // Elegir al azar entre los mejores resultados (no siempre el mismo) para que
+  // varios segmentos con la misma query no repitan el idéntico clip de stock.
+  const top = candidates.slice(0, 5);
+  return top[Math.floor(Math.random() * top.length)].link;
 }
 
 module.exports = { searchVideo };
