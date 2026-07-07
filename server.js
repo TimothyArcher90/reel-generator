@@ -541,10 +541,20 @@ app.get("/test-clip", async (req, res) => {
     }
     const prompt = req.query.prompt ||
       "Extreme close-up of a golden DNA double helix rotating slowly, glowing particles, camera pushes in, cinematic lighting, dark editorial aesthetic with warm gold accent, 9:16 vertical, photorealistic, in motion";
-    // 1) imagen gratis (Pollinations)
-    const buffer = await pollinationsImage.generateImage(prompt, 70000);
-    // 2) animarla con fal.ai (de pago — 1 clip)
-    const videoUrl = await withTimeout(falVideo.animateImage(buffer, prompt), 120000, "fal.ai timeout");
+    // 1) imagen gratis (Pollinations) — si falla aquí, NO se gastó nada (fal ni se llamó)
+    let buffer;
+    try {
+      buffer = await pollinationsImage.generateImage(prompt, 70000);
+    } catch (e) {
+      return res.status(503).json({ ok: false, paso: "imagen-gratis (Pollinations)", gasto: "NINGUNO (fal.ai no se llamó)", error: friendlyError(e) + " — es el generador de imágenes GRATIS que está saturado, no fal.ai. No se cobró nada. Reintenta en 1-2 min." });
+    }
+    // 2) animarla con fal.ai (de pago — 1 clip ~$0.20)
+    let videoUrl;
+    try {
+      videoUrl = await withTimeout(falVideo.animateImage(buffer, prompt), 120000, "fal.ai timeout");
+    } catch (e) {
+      return res.status(503).json({ ok: false, paso: "animacion-pago (fal.ai)", gasto: "posible ~$0.20 si el clip se generó; si fue 429/timeout antes de generar, $0", error: friendlyError(e) });
+    }
     // 3) descargar el resultado para servirlo
     const out = path.join("outputs", "test-clip.mp4");
     await downloadFile(videoUrl, out);
