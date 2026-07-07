@@ -21,51 +21,63 @@ const { downloadFile, getAudioDuration } = require("./pipeline/higgsfield");
 const useLTXVideo = true;
 
 // prompts: array de { video, stock } por segmento — 'video' es el prompt
-// cinematográfico rico (para LTX/IA), 'stock' es la consulta corta y concreta
-// derivada del CONTENIDO real del segmento (para el respaldo de Pexels).
-async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
+// cinematográfico rico (para la imagen IA y la animación), 'stock' es la
+// consulta corta y concreta derivada del CONTENIDO real del segmento (para el
+// respaldo final de Pexels).
+//
+// Orden del pipeline por clip (pedido explícito del usuario: "solo imágenes
+// generadas con IA, pero esas imágenes deben convertirse en VIDEO", clips
+// cortos de máx 3s, 100% ajustados al guion):
+//   1. Generar la imagen con Pollinations (IA, gratis, alineada al prompt del
+//      segmento) — esta es ahora la base SIEMPRE, no un respaldo.
+//   2. Animar esa imagen con LTX-Video (image-to-video, GPU ZeroGPU real,
+//      máx 3s) para que sea VIDEO real con movimiento, no una foto con zoom.
+//   3. Si LTX no responde a tiempo/sin cuota: usar la imagen tal cual con
+//      Ken Burns (renderVideo.js ya lo hace) — sigue siendo 100% IA y alineada
+//      al guion, solo sin movimiento propio del modelo de video.
+//   4. Solo si Pollinations mismo falla: video de stock de Pexels (red de
+//      seguridad final, nunca debe colgar el pipeline).
+async function generateAllClipsLTX(prompts, segDurSeconds, workDir, onProgress) {
   const urls = [];
+  const clipDuration = Math.min(3, segDurSeconds); // pedido explícito: máx 3s por clip
   for (let i = 0; i < prompts.length; i++) {
     const p = prompts[i];
     const videoPrompt = typeof p === "string" ? p : p.video;
     const stockQuery  = typeof p === "string" ? p : (p.stock || p.video);
-    onProgress(`Clip ${i + 1}/${prompts.length}: generando video (LTX-Video, gratis)...`);
+
+    let imageBuffer = null;
     try {
-      const videoUrl = await ltxSpace.generateClip(videoPrompt, segDurSeconds);
+      onProgress(`Clip ${i + 1}/${prompts.length}: generando imagen IA (Pollinations, gratis)...`);
+      // 70s: la cola gratuita de Pollinations es compartida globalmente y su
+      // latencia real varía mucho (2s a >90s, medido en vivo).
+      imageBuffer = await pollinationsImage.generateImage(videoPrompt, 70000);
+    } catch (e) {
+      onProgress(`Clip ${i + 1}/${prompts.length}: imagen IA sin respuesta — video de stock de Pexels ("${stockQuery}")`);
+      const videoUrl = await pexels.searchVideo(stockQuery);
       urls.push({ type: "video", url: videoUrl });
       onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
       continue;
-    } catch (e) {
-      // LTX-Video (cuota gratis compartida ZeroGPU) falló por cuota/caída.
     }
-    // Respaldo 1: IMAGEN generada por IA (Pollinations, gratis, sin API key) a
-    // partir del MISMO videoPrompt cinematográfico del segmento — a diferencia
-    // de un banco de stock, el resultado siempre está alineado al contenido real
-    // (el usuario reportó que el fallback anterior a Pexels traía clips
-    // genéricos/aburridos sin relación con el guion). Es también un servicio
-    // gratuito compartido con latencia variable (2-90s+), por eso va con
-    // timeout acotado — si no responde a tiempo, cae al respaldo final de Pexels
-    // en vez de colgar el pipeline.
+
+    const imgPath = path.join(workDir, `srcimg${i}.jpg`);
+    fs.writeFileSync(imgPath, imageBuffer);
+
     try {
-      onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota — generando imagen IA (Pollinations, gratis)...`);
-      // 70s (no 45s): la cola gratuita de Pollinations es compartida globalmente y
-      // su latencia real varía mucho (2s a >90s, medido en vivo). El presupuesto
-      // total por clip en el pipeline es holgado (varios minutos), así que vale la
-      // pena esperar más aquí para subir la tasa de imágenes IA reales en vez de
-      // caer a Pexels a la primera demora.
-      const buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
-      urls.push({ type: "image", buffer });
-      onProgress(`Clip ${i + 1}/${prompts.length}: listo (imagen IA)`);
-      continue;
+      onProgress(`Clip ${i + 1}/${prompts.length}: animando la imagen con IA (LTX-Video, gratis)...`);
+      // Timeout acotado: ZeroGPU es GPU compartida por toda la comunidad, puede
+      // quedar en cola indefinidamente si está saturada — nunca debe colgar el
+      // pipeline completo por un solo clip.
+      const videoUrl = await withTimeout(ltxSpace.generateClipFromImage(imgPath, videoPrompt, clipDuration), 90000, "LTX-Video timeout");
+      urls.push({ type: "video", url: videoUrl });
+      onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real)`);
     } catch (e) {
-      // Pollinations tardó demasiado o falló — último respaldo: stock real de
-      // Pexels con la consulta derivada del contenido, para que el reel SIEMPRE
-      // se complete sin colgarse.
+      // LTX-Video (cuota gratis compartida ZeroGPU) falló/sin cuota — la
+      // imagen IA ya generada se usa tal cual (Ken Burns en el render), sigue
+      // siendo 100% IA y alineada al guion, solo sin animación propia.
+      onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota (${e.message.slice(0, 80)}) — usando imagen IA fija.`);
+      urls.push({ type: "image", buffer: imageBuffer });
+      onProgress(`Clip ${i + 1}/${prompts.length}: listo (imagen IA)`);
     }
-    onProgress(`Clip ${i + 1}/${prompts.length}: imagen IA sin respuesta — video de stock de Pexels ("${stockQuery}")`);
-    const videoUrl = await pexels.searchVideo(stockQuery);
-    urls.push({ type: "video", url: videoUrl });
-    onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
   }
   return urls;
 }
@@ -239,7 +251,7 @@ async function runPipeline(jobId, text, baseFilename) {
   log(jobId, `[3/4] Generando ${N} clips (${useLTXVideo ? "LTX-Video gratis" : "Higgsfield Soul+DoP"}, ~${segDur.toFixed(1)}s c/u)...`);
   const clipUrls = await withTimeout(
     useLTXVideo
-      ? generateAllClipsLTX(visualPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); })
+      ? generateAllClipsLTX(visualPrompts, segDur, workDir, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); })
       : generateAllClips(visualPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
     Math.max(1500000, N * 400000), "Video clips timeout" // imagen+video por segmento, escala con N
   );
