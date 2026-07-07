@@ -80,14 +80,18 @@ const useHiggsfieldVoice = false;
 // aparte — no depende de borrar las variables en Railway.
 const useElevenLabs = false;
 // Clonación de voz REAL de Guillermo, gratis, vía el Space público de Hugging
-// Face "myshell-ai/OpenVoiceV2" (ver pipeline/voiceCloneOpenVoice.js — contrato
-// de API verificado en vivo, no adivinado). Corre en hardware cpu-basic
-// (sin GPU) compartido por toda la comunidad, así que la latencia real varía;
-// por eso siempre va con timeout acotado y cae a Edge-TTS si no responde a
-// tiempo, igual que ya se hace con los clips de video/imagen — el pipeline
+// Face "mrfakename/E2-F5-TTS" (modelo F5-TTS, ZeroGPU real A10G — ver
+// pipeline/voiceCloneF5.js, contrato de API verificado en vivo, no adivinado).
+// Se probó primero myshell-ai/OpenVoiceV2 pero corre Gradio 3.48 (2023),
+// incompatible con el protocolo del @gradio/client actual (confirmado con
+// fetch instrumentado: pide /config/info, ruta que no existe en Gradio 3.x).
+// F5-TTS corre Gradio 5.39 y SÍ conecta y genera audio real (~7-8s en prueba
+// en vivo). Sigue siendo un recurso ZeroGPU gratuito compartido por toda la
+// comunidad, así que la latencia real puede variar; por eso siempre va con
+// timeout acotado y cae a Edge-TTS si no responde a tiempo — el pipeline
 // NUNCA debe poder colgarse por esto.
-const useOpenVoiceClone = true;
-const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : useOpenVoiceClone ? "OpenVoice (clon de Guillermo, gratis)" : "Edge-TTS (gratis, genérica)";
+const useVoiceClone = true;
+const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : useVoiceClone ? "F5-TTS (clon de Guillermo, gratis)" : "Edge-TTS (gratis, genérica)";
 
 async function generateVoiceoverHiggsfieldToFile(text, outputPath) {
   const url = await generateVoiceoverHiggsfield(text, GUILLERMO_VOICE_ID);
@@ -95,24 +99,24 @@ async function generateVoiceoverHiggsfieldToFile(text, outputPath) {
   return outputPath;
 }
 
-const voiceCloneOpenVoice = require("./pipeline/voiceCloneOpenVoice");
-async function generateVoiceoverOpenVoiceWithFallback(text, outputPath, onProgress = () => {}) {
+const voiceCloneF5 = require("./pipeline/voiceCloneF5");
+async function generateVoiceoverCloneWithFallback(text, outputPath, onProgress = () => {}) {
   try {
-    onProgress("Clonando voz de Guillermo (OpenVoice, gratis)...");
-    const url = await withTimeout(voiceCloneOpenVoice.cloneVoice(text), 90000, "OpenVoice timeout");
-    await voiceCloneOpenVoice.downloadTo(url, outputPath);
+    onProgress("Clonando voz de Guillermo (F5-TTS, gratis)...");
+    const url = await withTimeout(voiceCloneF5.cloneVoice(text), 90000, "F5-TTS timeout");
+    await voiceCloneF5.downloadTo(url, outputPath);
     onProgress("Voz clonada lista.");
   } catch (e) {
-    // Space gratuito compartido, cpu-basic — puede tardar demasiado o fallar.
+    // ZeroGPU gratuito compartido — puede tardar demasiado o fallar por cuota.
     // Nunca debe tumbar el reel: cae a Edge-TTS (siempre funciona, sin cuota).
-    onProgress(`OpenVoice no respondió a tiempo (${e.message}) — usando Edge-TTS de respaldo...`);
+    onProgress(`F5-TTS no respondió a tiempo (${e.message}) — usando Edge-TTS de respaldo...`);
     await edgeTts.generateVoiceover(text, outputPath);
   }
 }
 
 const { generateVoiceover } = useHiggsfieldVoice
   ? { generateVoiceover: generateVoiceoverHiggsfieldToFile }
-  : (useElevenLabs ? elevenLabs : (useOpenVoiceClone ? { generateVoiceover: generateVoiceoverOpenVoiceWithFallback } : edgeTts));
+  : (useElevenLabs ? elevenLabs : (useVoiceClone ? { generateVoiceover: generateVoiceoverCloneWithFallback } : edgeTts));
 const { renderVideo }       = require("./pipeline/renderVideo");
 
 const app  = express();
