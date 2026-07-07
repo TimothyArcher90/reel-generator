@@ -61,7 +61,12 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
       // Timeout acotado: ZeroGPU es GPU compartida por toda la comunidad, puede
       // quedar en cola indefinidamente si está saturada — nunca debe colgar el
       // pipeline completo por un solo clip.
-      const videoUrl = await withTimeout(ltxSpace.generateClip(videoPrompt, clipDuration), 90000, "LTX-Video timeout");
+      // 45s (no 90s): con más clips por reel (ritmo de máx 4s c/u) y hasta 4
+      // intentos por clip (tokens × Spaces en el pool), un timeout largo por
+      // intento alargaría demasiado el pipeline total. Los fallos por cuota
+      // ya vienen casi instantáneos (verificado en vivo), así que 45s alcanza
+      // de sobra para un intento real y no penaliza el resto de la cola.
+      const videoUrl = await withTimeout(ltxSpace.generateClip(videoPrompt, clipDuration), 45000, "LTX-Video timeout");
       urls.push({ type: "video", url: videoUrl });
       onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real)`);
       continue;
@@ -240,25 +245,55 @@ async function runPipeline(jobId, text, baseFilename) {
   const duration = await getAudioDuration(audioFile);
   log(jobId, `Voz lista — ${duration}s`);
 
-  // Step 3 — Video clips (Higgsfield Cloud: imagen Soul + animación DoP por segmento)
-  const segDur = Math.max(3, duration / N);
+  // Step 3 — Video clips
   // Formato nuevo: videoPrompts (cinematográfico rico) + stockQueries (consulta
   // concreta derivada del contenido de cada segmento). Fallback al formato viejo
   // (imagePrompts/motionPrompts) por si un guion antiguo quedara en cola.
-  const visualPrompts = (script.videoPrompts && script.stockQueries)
+  const segmentPrompts = (script.videoPrompts && script.stockQueries)
     ? script.videoPrompts.map((v, i) => ({ video: v, stock: script.stockQueries[i] || v }))
     : (script.imagePrompts && script.motionPrompts)
       ? script.imagePrompts.map((img, i) => ({ video: `${img}. ${script.motionPrompts[i] || ""}`, stock: img }))
       : (script.videoPrompts || []).map(v => ({ video: v, stock: v }));
-  upd(jobId, { step: 3, statusMsg: `Generando ${N} clips de video...` });
-  log(jobId, `[3/4] Generando ${N} clips (${useLTXVideo ? "LTX-Video gratis" : "Higgsfield Soul+DoP"}, ~${segDur.toFixed(1)}s c/u)...`);
+
+  // RITMO (pedido explícito del usuario, no negociable — ver memoria
+  // project_reel_video_quality_bar): cada clip visual dura MÁX 4s. Antes, un
+  // clip visual = un segmento de guion, así que un segmento de guion largo
+  // (ej. 18s de narración) producía UN SOLO clip de 18s — una foto fija con
+  // zoom durante 18s, exactamente la queja del usuario ("imágenes que duran
+  // más de 6 segundos"). Ahora se estima cuánto dura HABLADO cada segmento
+  // (proporcional a su longitud de texto — aproximación razonable porque el
+  // TTS habla a ritmo aprox. constante) y se generan tantos clips de ~4s como
+  // hagan falta para cubrir ese segmento, todos con el MISMO prompt visual del
+  // segmento (así el contenido se sigue viendo 100% alineado al guion) — el
+  // ritmo de cortes ahora lo marca el guion real, no un valor fijo arbitrario.
+  const MAX_CLIP_SECONDS = 4;
+  const MAX_TOTAL_CLIPS = 20; // techo de seguridad: un guion inusualmente largo no debe disparar decenas de llamadas
+  const totalCaptionChars = script.captions.reduce((sum, c) => sum + c.length, 0) || 1;
+  const visualPrompts = [];
+  segmentPrompts.forEach((p, i) => {
+    const estSegDur = Math.max(2, duration * (script.captions[i].length / totalCaptionChars));
+    const nSubClips = Math.max(1, Math.round(estSegDur / MAX_CLIP_SECONDS));
+    for (let k = 0; k < nSubClips; k++) visualPrompts.push(p);
+  });
+  if (visualPrompts.length > MAX_TOTAL_CLIPS) {
+    // Recortar proporcionalmente en vez de cortar en seco al final (eso dejaría
+    // los últimos segmentos del guion sin ningún clip) — se toma 1 de cada k.
+    const step = visualPrompts.length / MAX_TOTAL_CLIPS;
+    const trimmed = [];
+    for (let i = 0; i < MAX_TOTAL_CLIPS; i++) trimmed.push(visualPrompts[Math.floor(i * step)]);
+    visualPrompts.length = 0;
+    visualPrompts.push(...trimmed);
+  }
+  const segDur = Math.max(2, Math.min(MAX_CLIP_SECONDS, duration / visualPrompts.length));
+  upd(jobId, { step: 3, statusMsg: `Generando ${visualPrompts.length} clips de video...` });
+  log(jobId, `[3/4] Generando ${visualPrompts.length} clips (${useLTXVideo ? "LTX-Video gratis" : "Higgsfield Soul+DoP"}, ~${segDur.toFixed(1)}s c/u, ritmo del guion)...`);
   const clipUrls = await withTimeout(
     useLTXVideo
       ? generateAllClipsLTX(visualPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); })
       : generateAllClips(visualPrompts, segDur, msg => { log(jobId, msg); upd(jobId, { statusMsg: msg }); }),
-    Math.max(1500000, N * 400000), "Video clips timeout" // imagen+video por segmento, escala con N
+    Math.max(1500000, visualPrompts.length * 400000), "Video clips timeout" // imagen+video por clip, escala con la cantidad real de clips
   );
-  // Nota: si LTX generó menos clips que segmentos del guion (tope de cuota gratis),
+  // Nota: si LTX generó menos clips que los pedidos (tope de cuota gratis),
   // renderVideo.js ya recalcula segDur internamente a partir de clips.length, así
   // que cada clip se estira automáticamente para cubrir la duración total del audio.
   const clipFiles = [];
@@ -274,8 +309,8 @@ async function runPipeline(jobId, text, baseFilename) {
       await downloadFile(clip.url, dest);
     }
     clipFiles.push({ path: dest, type: clip.type });
-    log(jobId, `Clip ${i + 1}/${N} descargado${isImage ? " (imagen IA generada del guion)" : ""}`);
-    upd(jobId, { statusMsg: `Descargando clips... ${i + 1}/${N}` });
+    log(jobId, `Clip ${i + 1}/${clipUrls.length} descargado${isImage ? " (imagen IA generada del guion)" : ""}`);
+    upd(jobId, { statusMsg: `Descargando clips... ${i + 1}/${clipUrls.length}` });
   }
 
   // Step 4 — Render MP4
