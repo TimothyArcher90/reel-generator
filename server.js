@@ -418,6 +418,26 @@ app.get("/test-voice", async (req, res) => {
   }
 });
 
+// ── GET /test-voice-variant ── comparar distintos parámetros de clonación XTTS
+// (temporal, para elegir la mejor combinación con el usuario escuchando) ──
+app.get("/test-voice-variant", async (req, res) => {
+  try {
+    const ref = req.query.ref === "full" ? voiceCloneXTTS.DEFAULT_REF_AUDIO_URL.replace("guillermo_ref.wav", "guillermo_ref_full.wav") : voiceCloneXTTS.DEFAULT_REF_AUDIO_URL;
+    const temperature = parseFloat(req.query.temp || "0.65");
+    const gptCondLen = parseInt(req.query.gpt || "30", 10);
+    const name = req.query.name || "variant";
+    const out = path.join("outputs", `${name}.mp3`);
+    const url = await voiceCloneXTTS.cloneVoice(
+      "Hola, esto es una prueba de clonacion de voz para los reels del equipo de Macrowise Capital.",
+      { refAudioUrl: ref, temperature, gptCondLen }
+    );
+    await voiceCloneXTTS.downloadTo(url, out);
+    res.json({ ok: true, ref, temperature, gptCondLen, audio: `/download/${name}.mp3` });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
+});
+
 // ── GET /test-voice-minimax ── prueba barata y aislada de la voz de MiniMax
 // (API directa, no Replicate) — para saber qué voice_id hay guardado ────────
 app.get("/test-voice-minimax", async (req, res) => {

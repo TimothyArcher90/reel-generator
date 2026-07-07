@@ -27,19 +27,19 @@ function clientOptions() {
 }
 
 // text: español. refAudioUrl: URL pública del wav de referencia (Guillermo por defecto).
-async function cloneVoice(text, { refAudioUrl = DEFAULT_REF_AUDIO_URL, language = "Spanish" } = {}) {
+async function cloneVoice(text, { refAudioUrl = DEFAULT_REF_AUDIO_URL, language = "Spanish", temperature = 0.75, gptCondLen = 30 } = {}) {
   const client = await Client.connect(SPACE_ID, clientOptions());
   const result = await client.predict("/voice_clone_synthesis", [
     text,
     refAudioUrl,
     null, // example_audio_name — debe ir vacío cuando se usa reference_audio_url
     language,
-    0.75, // temperature
+    temperature,
     1,    // speed
     true, // do_sample
     5,    // repetition_penalty
     1,    // length_penalty
-    30,   // gpt_cond_len
+    gptCondLen,
     50,   // top_k
     0.85, // top_p
     true, // remove_silence
