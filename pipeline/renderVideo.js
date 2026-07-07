@@ -1,5 +1,6 @@
 const { spawn, execSync, spawnSync } = require("child_process");
 const path = require("path");
+const fs = require("fs");
 
 // Preferir ffmpeg del sistema (nixpacks); fallback a ffmpeg-static
 let ffmpegPath;
@@ -121,31 +122,23 @@ async function renderVideo({ clips, audioFile, duration, outPath }) {
     parts.push(part);
   }
 
-  // 2. Unir con crossfade real (xfade), de a pares consecutivos — bajo consumo de
-  //    memoria porque solo decodifica 2 clips (ya livianos) a la vez. Ahora accDur
-  //    es exacto porque todos los parts miden segDur real, no una suposición.
-  let acc = parts[0];
-  let accDur = segDur;
-  for (let i = 1; i < N; i++) {
-    const cutIndex = i - 1;
-    const trans = transDurFor(cutIndex);
-    const transType = transTypeFor(cutIndex);
-    const offset = Math.max(0, accDur - trans);
-    const merged = path.join(workDir, `merge${i}.mp4`);
-    await run([
-      "-y", "-i", acc, "-i", parts[i],
-      "-filter_complex", `[0:v][1:v]xfade=transition=${transType}:duration=${trans}:offset=${offset.toFixed(2)}[v]`,
-      "-map", "[v]",
-      "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24",
-      merged
-    ], `xfade ${i} (${transType})`);
-    const mergedDur = probeDuration(merged);
-    const expectedDur = accDur + segDur - trans;
-    if (mergedDur < expectedDur - 1) {
-      throw new Error(`Unión ${i}/${N - 1}: quedó en ${mergedDur.toFixed(1)}s, se esperaban ~${expectedDur.toFixed(1)}s — el xfade se rompió a mitad de camino`);
-    }
-    acc = merged;
-    accDur = mergedDur;
+  // 2. Unir TODOS los clips en UN SOLO PASO con el concat demuxer y "-c copy"
+  //    (sin re-codificar) — casi instantáneo y con bajísimo uso de memoria.
+  //    ANTES: se unían de a pares con xfade, re-codificando TODO el video
+  //    acumulado en cada paso (O(N²)); con 12 clips eran 11 pasadas cada vez más
+  //    pesadas que hacían que Railway se quedara sin memoria/tiempo y reiniciara,
+  //    perdiendo el job entero. Como todos los `parts` ya están normalizados a
+  //    exactamente wxh, 30fps, libx264, yuv420p y misma duración, el corte entre
+  //    ellos es un corte duro limpio (estilo reel rápido) y accDur es exacto.
+  // El concat demuxer resuelve rutas relativas al directorio del propio archivo
+  // de lista; por eso se escriben solo los nombres base (los parts están en workDir).
+  const listPath = path.join(workDir, "concat.txt");
+  fs.writeFileSync(listPath, parts.map(p => `file '${path.basename(p)}'`).join("\n"));
+  const acc = path.join(workDir, "concat.mp4");
+  await run(["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", acc], "concat clips");
+  let accDur = probeDuration(acc);
+  if (accDur < N * segDur - 1) {
+    throw new Error(`Concat: quedó en ${accDur.toFixed(1)}s, se esperaban ~${(N * segDur).toFixed(1)}s`);
   }
 
   // 3. Extender el video (congelando el último frame) hasta cubrir audio + cola de
