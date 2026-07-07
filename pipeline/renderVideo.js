@@ -108,8 +108,26 @@ async function renderVideo({ clips, audioFile, duration, outPath, onProgress = (
     // Escala a 1.25x (antes 2x) — suficiente margen para el zoom Ken Burns pero
     // procesa mucho más rápido; el zoompan sigue reduciendo a la salida final wxh.
     const sw = Math.round(w * 1.25), sh = Math.round(h * 1.25);
-    const vf = `scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${sw}:${sh},` +
-      `zoompan=z='${zoomDir}':d=${zoomFrames}:s=${w}x${h}:fps=30,setsar=1,${brandGrade}${glitchFor(i)},format=yuv420p`;
+    // BUG RAÍZ del cuelgue/timeout de ffmpeg: el parámetro "d" de zoompan es cuántos
+    // FRAMES DE SALIDA genera por cada FRAME DE ENTRADA. Con una imagen fija (-loop 1,
+    // un solo frame repetido) hay que poner d=zoomFrames para "estirarla" a la duración
+    // deseada. Pero con un clip de VIDEO real (ya tiene ~200-300 frames propios), poner
+    // d=zoomFrames multiplica CADA uno de esos frames por zoomFrames más — con un clip
+    // de 9s eso son cientos de miles de frames de salida, por eso el proceso nunca
+    // terminaba en 45s (llevaba 111s y subiendo cuando se mató). Para video, d debe
+    // ser 1 (un frame de salida por cada frame de entrada); el zoom se sigue viendo
+    // suave porque zoompan acumula el nivel de zoom internamente frame a frame.
+    const zoomD = isImage ? zoomFrames : 1;
+    // Para video (d=1) hay que normalizar el fps ANTES de zoompan con un filtro "fps=30"
+    // explícito — si no, cuando el clip fuente no es exactamente 30fps (Pexels trae
+    // 24/25/29.97fps variados), zoompan solo re-etiqueta los frames existentes a 30fps
+    // sin insertar/duplicar los que faltan, y la duración real del clip se encoge
+    // (verificado: un clip de 9.4s a 25fps salía en 7.83s). "fps=30" primero hace la
+    // conversión de framerate correctamente (duplicando/descartando frames), preservando
+    // la duración real exacta antes de que zoompan trabaje 1:1.
+    const fpsNormalize = isImage ? "" : "fps=30,";
+    const vf = `${fpsNormalize}scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${sw}:${sh},` +
+      `zoompan=z='${zoomDir}':d=${zoomD}:s=${w}x${h}:fps=30,setsar=1,${brandGrade}${glitchFor(i)},format=yuv420p`;
 
     let args;
     if (isImage) {
@@ -131,7 +149,7 @@ async function renderVideo({ clips, audioFile, duration, outPath, onProgress = (
     }
 
     onProgress(`Procesando clip ${i + 1}/${N} (ffmpeg)...`);
-    await run(args, `clip ${i + 1}`);
+    await run(args, `clip ${i + 1}`, 60000);
     const partDur = probeDuration(part);
     if (partDur < segDur - 0.5) {
       throw new Error(`Clip ${i + 1}: quedó en ${partDur.toFixed(1)}s, se esperaban ${segDur.toFixed(1)}s — revisar el clip fuente`);
