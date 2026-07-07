@@ -55,6 +55,14 @@ const useLTXVideo = true;
 async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
   const urls = [];
   const clipDuration = Math.min(2, segDurSeconds); // límite real probado del Space (ver ltxSpace.js)
+  // TOPE DE CLIPS DE PAGO por reel (control de costo directo del usuario).
+  // fal.ai (Wan 480p) cuesta ~$0.20 por clip animado. Con MAX_PAID_CLIPS=3 el
+  // costo MÁXIMO por reel es ~$0.60, aunque el LTX gratis falle en todos. Se
+  // animan de pago los PRIMEROS clips (el hook y primeras escenas = lo que más
+  // retiene); los demás usan imagen IA gratis con movimiento Ken Burns. Ajusta
+  // el número con la variable de entorno FAL_MAX_PAID_CLIPS en Railway.
+  const MAX_PAID_CLIPS = parseInt(process.env.FAL_MAX_PAID_CLIPS || "3", 10);
+  let paidCount = 0;
   for (let i = 0; i < prompts.length; i++) {
     const p = prompts[i];
     const videoPrompt = typeof p === "string" ? p : p.video;
@@ -107,16 +115,19 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
     // LTX gratis no dio. Se paga (~$0.05-0.10) únicamente por este clip, que si
     // no saldría estático. Si fal falla o no está configurado, se usa la imagen
     // con Ken Burns (sigue siendo 100% IA y on-topic, solo sin movimiento propio).
-    if (falVideo.isConfigured()) {
+    if (falVideo.isConfigured() && paidCount < MAX_PAID_CLIPS) {
       try {
-        onProgress(`Clip ${i + 1}/${prompts.length}: animando la imagen con IA de pago (fal.ai Wan)...`);
+        onProgress(`Clip ${i + 1}/${prompts.length}: animando la imagen con IA de pago (fal.ai Wan 480p, ${paidCount + 1}/${MAX_PAID_CLIPS})...`);
         const videoUrl = await withTimeout(falVideo.animateImage(buffer, videoPrompt), 120000, "fal.ai timeout");
+        paidCount++;
         urls.push({ type: "video", url: videoUrl });
         onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real - fal.ai)`);
         continue;
       } catch (e) {
         onProgress(`Clip ${i + 1}/${prompts.length}: fal.ai no disponible (${e.message.slice(0, 60)}) — usando imagen IA fija.`);
       }
+    } else if (falVideo.isConfigured() && paidCount >= MAX_PAID_CLIPS) {
+      onProgress(`Clip ${i + 1}/${prompts.length}: tope de clips de pago alcanzado (${MAX_PAID_CLIPS}) — imagen IA gratis para el resto.`);
     }
 
     // Sin fal (o fal falló): imagen fija con Ken Burns.

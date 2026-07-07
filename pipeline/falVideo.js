@@ -43,7 +43,15 @@ async function animateImage(imagePathOrBuffer, motionPrompt) {
   const result = await fal.subscribe("fal-ai/wan-i2v", {
     input: {
       prompt: motionPrompt,
-      image_url: imageUrl
+      image_url: imageUrl,
+      // AHORRO DE COSTO (verificado en la doc de fal): Wan cobra POR VIDEO, no
+      // por segundo. 480p = $0.20 (0.5 unidades) vs 720p = $0.40 (1 unidad) —
+      // la MITAD de precio. El reel final es vertical 720x1280 y el render lo
+      // reescala igual, así que 480p animado se ve bien y cuesta la mitad.
+      // num_frames=81 es el mínimo que EVITA el recargo de 1.25x (>81 frames).
+      resolution: "480p",
+      aspect_ratio: "9:16",
+      num_frames: 81
     },
     logs: false
   });
