@@ -19,7 +19,13 @@ const fs = require("fs");
 const { Client } = require("@gradio/client");
 
 const SPACE_ID = "hasanbasbunar/Voice-Cloning-XTTS-v2";
-const DEFAULT_REF_AUDIO_URL = "https://raw.githubusercontent.com/TimothyArcher90/reel-generator/main/pipeline/assets/guillermo_ref.wav";
+// El usuario comparó 3 variantes escuchándolas en vivo (2026-07-07): referencia
+// completa (41.6s) + temperature=0.3 (más fiel, menos variación creativa) +
+// gpt_cond_len=50 (máximo) sonó más natural que las otras combinaciones —
+// aunque el usuario confirmó que sigue sin ser 100% la identidad de Guillermo
+// (limitación real de fidelidad de este modelo/Space gratuito, no un bug —
+// ver commit de este cambio). Se dejan estos como default de producción.
+const DEFAULT_REF_AUDIO_URL = "https://raw.githubusercontent.com/TimothyArcher90/reel-generator/main/pipeline/assets/guillermo_ref_full.wav";
 
 function clientOptions() {
   const token = process.env.HF_TOKEN;
@@ -27,7 +33,7 @@ function clientOptions() {
 }
 
 // text: español. refAudioUrl: URL pública del wav de referencia (Guillermo por defecto).
-async function cloneVoice(text, { refAudioUrl = DEFAULT_REF_AUDIO_URL, language = "Spanish", temperature = 0.75, gptCondLen = 30 } = {}) {
+async function cloneVoice(text, { refAudioUrl = DEFAULT_REF_AUDIO_URL, language = "Spanish", temperature = 0.3, gptCondLen = 50 } = {}) {
   const client = await Client.connect(SPACE_ID, clientOptions());
   const result = await client.predict("/voice_clone_synthesis", [
     text,
