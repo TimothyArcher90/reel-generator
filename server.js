@@ -20,6 +20,7 @@ const { generateAllClips, generateVoiceoverHiggsfield, GUILLERMO_VOICE_ID } = re
 const ltxSpace = require("./pipeline/ltxSpace");
 const pexels = require("./pipeline/pexels");
 const pollinationsImage = require("./pipeline/pollinationsImage");
+const falVideo = require("./pipeline/falVideo");
 const subtitles = require("./pipeline/subtitles");
 const { qaScript } = require("./pipeline/qaScript");
 const { qaImage } = require("./pipeline/qaImage");
@@ -77,14 +78,13 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
       onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota (${e.message.slice(0, 80)}) — generando imagen IA de respaldo...`);
     }
 
+    // LTX gratis se agotó. Generamos la imagen IA (gratis) que servirá de
+    // primer frame, y luego intentamos ANIMARLA de verdad.
+    let buffer = null;
     try {
-      let buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
+      buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
       // Control de calidad automático (barato, Haiku con visión): rechaza
-      // imágenes borrosas/genéricas/fuera de tema antes de aceptarlas en el
-      // reel — pedido explícito del usuario. Un solo reintento con seed nueva
-      // (generateImage ya randomiza el seed en cada llamada) si falla el QA;
-      // si el QA mismo no está disponible (timeout/error), se acepta la
-      // imagen tal cual en vez de bloquear el reel por un chequeo extra.
+      // imágenes borrosas/genéricas/fuera de tema antes de aceptarlas.
       try {
         const captionForQA = (typeof prompts[i] === "object" && prompts[i].caption) || videoPrompt;
         let qa = await withTimeout(qaImage(buffer, captionForQA), 20000, "QA imagen timeout");
@@ -93,16 +93,35 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
           buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
         }
       } catch (e) { /* QA no disponible — seguir con la imagen ya generada */ }
-      urls.push({ type: "image", buffer });
-      onProgress(`Clip ${i + 1}/${prompts.length}: listo (imagen IA)`);
-      continue;
     } catch (e) {
+      // Ni siquiera se pudo generar la imagen — último recurso: stock de Pexels.
       onProgress(`Clip ${i + 1}/${prompts.length}: imagen IA sin respuesta — video de stock de Pexels ("${stockQuery}")`);
+      const videoUrl = await pexels.searchVideo(stockQuery);
+      urls.push({ type: "video", url: videoUrl });
+      onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
+      continue;
     }
 
-    const videoUrl = await pexels.searchVideo(stockQuery);
-    urls.push({ type: "video", url: videoUrl });
-    onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
+    // ANIMAR la imagen con fal.ai (DE PAGO) — SOLO si el usuario configuró
+    // FAL_KEY. Esto es lo que convierte la imagen fija en VIDEO REAL cuando el
+    // LTX gratis no dio. Se paga (~$0.05-0.10) únicamente por este clip, que si
+    // no saldría estático. Si fal falla o no está configurado, se usa la imagen
+    // con Ken Burns (sigue siendo 100% IA y on-topic, solo sin movimiento propio).
+    if (falVideo.isConfigured()) {
+      try {
+        onProgress(`Clip ${i + 1}/${prompts.length}: animando la imagen con IA de pago (fal.ai Wan)...`);
+        const videoUrl = await withTimeout(falVideo.animateImage(buffer, videoPrompt), 120000, "fal.ai timeout");
+        urls.push({ type: "video", url: videoUrl });
+        onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real - fal.ai)`);
+        continue;
+      } catch (e) {
+        onProgress(`Clip ${i + 1}/${prompts.length}: fal.ai no disponible (${e.message.slice(0, 60)}) — usando imagen IA fija.`);
+      }
+    }
+
+    // Sin fal (o fal falló): imagen fija con Ken Burns.
+    urls.push({ type: "image", buffer });
+    onProgress(`Clip ${i + 1}/${prompts.length}: listo (imagen IA)`);
   }
   return urls;
 }
@@ -301,7 +320,7 @@ async function runPipeline(jobId, text, baseFilename) {
   // segmento (así el contenido se sigue viendo 100% alineado al guion) — el
   // ritmo de cortes ahora lo marca el guion real, no un valor fijo arbitrario.
   const MAX_CLIP_SECONDS = 3; // "ninguna escena debe durar más de 3 segundos" — regla estricta del prompt de Director Creativo
-  const MAX_TOTAL_CLIPS = 20; // techo de seguridad: un guion inusualmente largo no debe disparar decenas de llamadas
+  const MAX_TOTAL_CLIPS = 12; // BLINDAJE DE GASTO: máx 12 clips/reel. Con fal.ai de pago (~$0.08/clip) esto acota el costo máximo por reel a ~$1, aunque haya un bug — nunca puede dispararse a decenas de llamadas de pago.
   const totalCaptionChars = script.captions.reduce((sum, c) => sum + c.length, 0) || 1;
   // Duración estimada de cada segmento de guion (para el ritmo de clips Y para
   // sincronizar los subtítulos incrustados con lo que realmente se está diciendo).
@@ -498,6 +517,35 @@ app.get("/test", async (req, res) => {
   } catch(e) { results.pexels_api = "ERROR: " + (e.response?.status || e.message.slice(0,80)); }
 
   res.json(results);
+});
+
+// ── GET /test-clip ── PRUEBA DE 1 SOLO CLIP ANIMADO (fal.ai, ~$0.05-0.10) ──
+// Pensado para que el usuario verifique la CALIDAD de la animación de pago
+// ANTES de gastar en un reel completo. Genera una imagen IA (gratis) y la
+// anima con fal.ai Wan. Cuesta solo un clip, no un reel entero.
+app.get("/test-clip", async (req, res) => {
+  try {
+    if (!falVideo.isConfigured()) {
+      return res.status(400).json({ ok: false, error: "FAL_KEY no configurada en Railway — agrega la API key de fal.ai primero. Sin ella no se gasta nada." });
+    }
+    const prompt = req.query.prompt ||
+      "Extreme close-up of a golden DNA double helix rotating slowly, glowing particles, camera pushes in, cinematic lighting, dark editorial aesthetic with warm gold accent, 9:16 vertical, photorealistic, in motion";
+    // 1) imagen gratis (Pollinations)
+    const buffer = await pollinationsImage.generateImage(prompt, 70000);
+    // 2) animarla con fal.ai (de pago — 1 clip)
+    const videoUrl = await withTimeout(falVideo.animateImage(buffer, prompt), 120000, "fal.ai timeout");
+    // 3) descargar el resultado para servirlo
+    const out = path.join("outputs", "test-clip.mp4");
+    await downloadFile(videoUrl, out);
+    res.json({
+      ok: true,
+      nota: "Clip animado de prueba (fal.ai Wan). Costó ~$0.05-0.10. Míralo antes de generar un reel completo.",
+      video: "/download/test-clip.mp4",
+      falVideoUrl: videoUrl
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
 });
 
 // ── GET /test-voice ── prueba de la voz activa (ElevenLabs/Guillermo o Edge-TTS) ──
