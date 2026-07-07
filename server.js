@@ -48,7 +48,12 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
     // en vez de colgar el pipeline.
     try {
       onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota — generando imagen IA (Pollinations, gratis)...`);
-      const buffer = await pollinationsImage.generateImage(videoPrompt, 45000);
+      // 70s (no 45s): la cola gratuita de Pollinations es compartida globalmente y
+      // su latencia real varía mucho (2s a >90s, medido en vivo). El presupuesto
+      // total por clip en el pipeline es holgado (varios minutos), así que vale la
+      // pena esperar más aquí para subir la tasa de imágenes IA reales en vez de
+      // caer a Pexels a la primera demora.
+      const buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
       urls.push({ type: "image", buffer });
       onProgress(`Clip ${i + 1}/${prompts.length}: listo (imagen IA)`);
       continue;
