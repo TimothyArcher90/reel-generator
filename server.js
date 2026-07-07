@@ -3,6 +3,16 @@ const express = require("express");
 const path    = require("path");
 const fs      = require("fs");
 
+// Red de seguridad global: un rechazo de promesa sin manejar en CUALQUIER
+// parte del código (no solo withTimeout, cualquier otro que se nos escape)
+// tumbaba el proceso Node completo, reiniciando el contenedor de Railway y
+// perdiendo el job en curso (causa raíz real de los "Job no encontrado"
+// recurrentes). Loguear en vez de matar el proceso — un job individual puede
+// fallar y reportarse como error sin necesidad de reiniciar todo el servidor.
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED REJECTION (ignorada, no debe tumbar el servidor):", reason);
+});
+
 const { generateScript }    = require("./pipeline/generateScript");
 const edgeTts      = require("./pipeline/edgetts");
 const elevenLabs   = require("./pipeline/elevenlabs");
@@ -291,6 +301,17 @@ async function runPipeline(jobId, text, baseFilename) {
 }
 
 function withTimeout(promise, ms, label) {
+  // BUG RAÍZ real (encontrado 2026-07-07, causaba los "Job no encontrado"
+  // recurrentes): Promise.race NO cancela la promesa perdedora — sigue
+  // corriendo en segundo plano. Si esa promesa original se rechaza DESPUÉS de
+  // que el timeout ya ganó la carrera, ese rechazo queda sin ningún .catch()
+  // escuchándolo → Node.js lo trata como "unhandled rejection" y MATA EL
+  // PROCESO ENTERO, lo que hace que Railway reinicie el contenedor a mitad de
+  // un job real (perdiendo todo el estado en memoria, incluido el job en
+  // curso). El .catch(() => {}) de abajo "atrapa" ese rechazo tardío sin
+  // hacer nada con él — ya perdimos la carrera contra el timeout de todos
+  // modos, así que no cambia el resultado, solo evita que tumbe el proceso.
+  promise.catch(() => {});
   return Promise.race([
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error(label)), ms))
