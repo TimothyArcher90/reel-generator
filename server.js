@@ -34,8 +34,7 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
       // vez de tirar el reel completo, cae a un video de stock real de Pexels
       // (también gratis) sobre el mismo tema, así el reel SIEMPRE se completa.
       onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video falló (${e.message.slice(0, 100)}) — usando video de stock de Pexels`);
-      const query = imagePrompt.split(",")[0].split(" ").slice(0, 6).join(" ");
-      videoUrl = await pexels.searchVideo(query);
+      videoUrl = await pexels.searchVideo(imagePrompt);
     }
     urls.push({ type: "video", url: videoUrl });
     onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
