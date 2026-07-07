@@ -73,8 +73,24 @@ async function animateProductUrl(productImageUrl, motionPrompt) {
   return url;
 }
 
+// Genera la imagen del primer frame con FLUX schnell en fal (~$0.003, casi
+// gratis y CONFIABLE — sin el límite de velocidad de Pollinations gratis que
+// nos bloquea constantemente). Devuelve la URL pública de la imagen, lista para
+// pasarla directo a animateProductUrl (sin re-subir). Solo tiene sentido usar
+// esto cuando ya vamos a pagar la animación de todos modos.
+async function generateImageUrl(prompt) {
+  ensureConfigured();
+  const result = await fal.subscribe("fal-ai/flux/schnell", {
+    input: { prompt, image_size: "portrait_16_9", num_images: 1 },
+    logs: false
+  });
+  const url = result?.data?.images?.[0]?.url || result?.images?.[0]?.url;
+  if (!url) throw new Error("fal flux: respuesta sin imagen — " + JSON.stringify(result).slice(0, 300));
+  return url;
+}
+
 function isConfigured() {
   return !!process.env.FAL_KEY;
 }
 
-module.exports = { animateImage, animateProductUrl, isConfigured };
+module.exports = { animateImage, animateProductUrl, generateImageUrl, isConfigured };

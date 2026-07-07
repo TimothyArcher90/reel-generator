@@ -86,13 +86,30 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
       onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota (${e.message.slice(0, 80)}) — generando imagen IA de respaldo...`);
     }
 
-    // LTX gratis se agotó. Generamos la imagen IA (gratis) que servirá de
-    // primer frame, y luego intentamos ANIMARLA de verdad.
+    // LTX gratis se agotó. VÍA DE PAGO (fal.ai) para VIDEO REAL animado — solo
+    // si hay FAL_KEY y no se pasó el tope de clips de pago. Genera el frame con
+    // fal FLUX (~$0.003, CONFIABLE, sin el 429 de Pollinations) y lo anima con
+    // Wan 480p (~$0.20). Es lo que convierte la imagen fija en movimiento real.
+    if (falVideo.isConfigured() && paidCount < MAX_PAID_CLIPS) {
+      try {
+        onProgress(`Clip ${i + 1}/${prompts.length}: generando + animando con IA de pago (fal.ai, ${paidCount + 1}/${MAX_PAID_CLIPS})...`);
+        const imgUrl = await withTimeout(falVideo.generateImageUrl(videoPrompt), 60000, "fal flux timeout");
+        const videoUrl = await withTimeout(falVideo.animateProductUrl(imgUrl, videoPrompt), 120000, "fal.ai timeout");
+        paidCount++;
+        urls.push({ type: "video", url: videoUrl });
+        onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real - fal.ai)`);
+        continue;
+      } catch (e) {
+        onProgress(`Clip ${i + 1}/${prompts.length}: fal.ai no disponible (${e.message.slice(0, 60)}) — imagen IA fija de respaldo.`);
+      }
+    } else if (falVideo.isConfigured() && paidCount >= MAX_PAID_CLIPS) {
+      onProgress(`Clip ${i + 1}/${prompts.length}: tope de clips de pago alcanzado (${MAX_PAID_CLIPS}) — imagen IA gratis para el resto.`);
+    }
+
+    // Sin pago (o fal falló): imagen IA GRATIS (Pollinations) con Ken Burns.
     let buffer = null;
     try {
       buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
-      // Control de calidad automático (barato, Haiku con visión): rechaza
-      // imágenes borrosas/genéricas/fuera de tema antes de aceptarlas.
       try {
         const captionForQA = (typeof prompts[i] === "object" && prompts[i].caption) || videoPrompt;
         let qa = await withTimeout(qaImage(buffer, captionForQA), 20000, "QA imagen timeout");
@@ -102,32 +119,12 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
         }
       } catch (e) { /* QA no disponible — seguir con la imagen ya generada */ }
     } catch (e) {
-      // Ni siquiera se pudo generar la imagen — último recurso: stock de Pexels.
+      // Ni la imagen gratis se pudo — último recurso: stock de Pexels.
       onProgress(`Clip ${i + 1}/${prompts.length}: imagen IA sin respuesta — video de stock de Pexels ("${stockQuery}")`);
       const videoUrl = await pexels.searchVideo(stockQuery);
       urls.push({ type: "video", url: videoUrl });
       onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
       continue;
-    }
-
-    // ANIMAR la imagen con fal.ai (DE PAGO) — SOLO si el usuario configuró
-    // FAL_KEY. Esto es lo que convierte la imagen fija en VIDEO REAL cuando el
-    // LTX gratis no dio. Se paga (~$0.05-0.10) únicamente por este clip, que si
-    // no saldría estático. Si fal falla o no está configurado, se usa la imagen
-    // con Ken Burns (sigue siendo 100% IA y on-topic, solo sin movimiento propio).
-    if (falVideo.isConfigured() && paidCount < MAX_PAID_CLIPS) {
-      try {
-        onProgress(`Clip ${i + 1}/${prompts.length}: animando la imagen con IA de pago (fal.ai Wan 480p, ${paidCount + 1}/${MAX_PAID_CLIPS})...`);
-        const videoUrl = await withTimeout(falVideo.animateImage(buffer, videoPrompt), 120000, "fal.ai timeout");
-        paidCount++;
-        urls.push({ type: "video", url: videoUrl });
-        onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real - fal.ai)`);
-        continue;
-      } catch (e) {
-        onProgress(`Clip ${i + 1}/${prompts.length}: fal.ai no disponible (${e.message.slice(0, 60)}) — usando imagen IA fija.`);
-      }
-    } else if (falVideo.isConfigured() && paidCount >= MAX_PAID_CLIPS) {
-      onProgress(`Clip ${i + 1}/${prompts.length}: tope de clips de pago alcanzado (${MAX_PAID_CLIPS}) — imagen IA gratis para el resto.`);
     }
 
     // Sin fal (o fal falló): imagen fija con Ken Burns.
@@ -541,19 +538,19 @@ app.get("/test-clip", async (req, res) => {
     }
     const prompt = req.query.prompt ||
       "Extreme close-up of a golden DNA double helix rotating slowly, glowing particles, camera pushes in, cinematic lighting, dark editorial aesthetic with warm gold accent, 9:16 vertical, photorealistic, in motion";
-    // 1) imagen gratis (Pollinations) — si falla aquí, NO se gastó nada (fal ni se llamó)
-    let buffer;
+    // 1) imagen con fal FLUX (~$0.003, confiable — evita el 429 de Pollinations gratis)
+    let imgUrl;
     try {
-      buffer = await pollinationsImage.generateImage(prompt, 70000);
+      imgUrl = await withTimeout(falVideo.generateImageUrl(prompt), 60000, "fal flux timeout");
     } catch (e) {
-      return res.status(503).json({ ok: false, paso: "imagen-gratis (Pollinations)", gasto: "NINGUNO (fal.ai no se llamó)", error: friendlyError(e) + " — es el generador de imágenes GRATIS que está saturado, no fal.ai. No se cobró nada. Reintenta en 1-2 min." });
+      return res.status(503).json({ ok: false, paso: "imagen (fal FLUX)", gasto: "~$0.003 o $0", error: friendlyError(e) });
     }
-    // 2) animarla con fal.ai (de pago — 1 clip ~$0.20)
+    // 2) animarla con fal.ai Wan (de pago — 1 clip ~$0.20)
     let videoUrl;
     try {
-      videoUrl = await withTimeout(falVideo.animateImage(buffer, prompt), 120000, "fal.ai timeout");
+      videoUrl = await withTimeout(falVideo.animateProductUrl(imgUrl, prompt), 120000, "fal.ai timeout");
     } catch (e) {
-      return res.status(503).json({ ok: false, paso: "animacion-pago (fal.ai)", gasto: "posible ~$0.20 si el clip se generó; si fue 429/timeout antes de generar, $0", error: friendlyError(e) });
+      return res.status(503).json({ ok: false, paso: "animacion-pago (fal.ai Wan)", gasto: "posible ~$0.20 si el clip se generó; si fue 429/timeout antes de generar, $0", error: friendlyError(e) });
     }
     // 3) descargar el resultado para servirlo
     const out = path.join("outputs", "test-clip.mp4");
