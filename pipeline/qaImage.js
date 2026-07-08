@@ -22,7 +22,7 @@ Evalúa RÁPIDO y con criterio ESTRICTO:
 - ¿Es una imagen nítida, de alta calidad, cinematográfica (no borrosa, no rota, no con artefactos raros)?
 - ¿PARECE UNA FOTOGRAFÍA REAL (hiperrealista, con luz e imperfecciones reales)? RECHAZA si se ve como render 3D, ilustración, mapa de calor/térmico, arte vectorial o cualquier estilo gráfico/artificial — el usuario exige fotorrealismo estricto, sin excepciones.
 - Si la imagen muestra manos, dedos, rostro o piel humana en primer plano: ¿se ve ANATÓMICAMENTE CORRECTA (número normal de dedos, piel con textura humana real, rasgos simétricos)? RECHAZA sin dudar si hay dedos de más/menos, piel con textura extraña/alienígena, o cualquier deformidad — es un fallo común y grave de los modelos de IA.
-- ¿Tiene relación temática real con la idea del segmento (no genérica/random)?
+- ¿Tiene relación temática real con la idea del segmento (no genérica/random)? RECHAZA si alguien que viera SOLO la imagen (sin leer el texto) no podría adivinar de qué está hablando — objetos abstractos/decorativos sin conexión obvia (un trofeo dorado genérico, una textura borrosa sin motivo aparente) cuentan como FAIL aunque estén nítidos y bien iluminados.
 - ¿Se ve profesional/atractiva, no barata?
 
 Responde SOLO con este JSON: {"pass": true|false, "reason": "motivo corto"}` }

@@ -67,6 +67,28 @@ function isHumanMotionSubject(text) {
   return HUMAN_MOTION_REGEX.test(text || "");
 }
 
+// Respaldo compartido: stock real de Pexels, y si eso también falla, una
+// imagen abstracta genérica seguro (nunca personas/anatomía) para que el
+// pipeline NUNCA se quede sin nada que mostrar en un slot. Usado tanto cuando
+// la imagen IA gratis no se pudo generar como cuando SÍ se generó pero
+// falló el control de calidad dos veces seguidas (genérica/sin relación con
+// el guion — la queja real del usuario en producción).
+async function stockOrGenericFallback(stockQuery, urls, i, total, onProgress) {
+  try {
+    const videoUrl = await pexels.searchVideo(stockQuery);
+    urls.push({ type: "video", url: videoUrl });
+    onProgress(`Clip ${i + 1}/${total}: listo (stock real)`);
+  } catch (e2) {
+    onProgress(`Clip ${i + 1}/${total}: Pexels también sin resultado (${e2.message.slice(0, 60)}) — imagen abstracta genérica de respaldo...`);
+    const genericBuffer = await pollinationsImage.generateImage(
+      "abstract flowing light and color, cinematic, hyper-realistic photograph, dark editorial aesthetic with warm gold accent, 9:16 vertical, no people, no text",
+      70000
+    );
+    urls.push({ type: "image", buffer: genericBuffer });
+    onProgress(`Clip ${i + 1}/${total}: listo (respaldo genérico)`);
+  }
+}
+
 async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
   const urls = [];
   const clipDuration = Math.min(2, segDurSeconds); // límite real probado del Space (ver ltxSpace.js)
@@ -157,6 +179,7 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
 
     // Sin pago (o fal falló): imagen IA GRATIS (Pollinations) con Ken Burns.
     let buffer = null;
+    let freeImageFailedQA = false;
     try {
       buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
       try {
@@ -165,6 +188,17 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
         if (!qa.pass) {
           onProgress(`Clip ${i + 1}/${prompts.length}: imagen IA rechazada por control de calidad (${qa.reason}) — regenerando...`);
           buffer = await pollinationsImage.generateImage(videoPrompt, 70000);
+          // BUG REAL (reportado por el usuario tras ver imágenes genéricas/sin
+          // relación con el guion en producción): el reintento NUNCA se volvía
+          // a validar — si la segunda imagen también fallaba el QA, se usaba
+          // igual, sin control. Ahora se re-valida; si sigue fallando, se
+          // descarta la imagen y se cae a stock real de Pexels en vez de
+          // arriesgar un segundo resultado igual de malo.
+          const qa2 = await withTimeout(qaImage(buffer, captionForQA), 20000, "QA imagen timeout (reintento)");
+          if (!qa2.pass) {
+            onProgress(`Clip ${i + 1}/${prompts.length}: la imagen regenerada TAMBIÉN falló el control de calidad (${qa2.reason}) — usando stock real en su lugar...`);
+            freeImageFailedQA = true;
+          }
         }
       } catch (e) { /* QA no disponible — seguir con la imagen ya generada */ }
     } catch (e) {
@@ -192,6 +226,24 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
         );
         urls.push({ type: "image", buffer: genericBuffer });
         onProgress(`Clip ${i + 1}/${prompts.length}: listo (respaldo genérico)`);
+      }
+      continue;
+    }
+
+    if (freeImageFailedQA) {
+      // La imagen regenerada también falló el QA (genérica/sin relación con
+      // el guion) — usar stock real de Pexels en vez de arriesgar un segundo
+      // resultado igual de malo (queja real: "las imágenes no atinan en nada").
+      onProgress(`Clip ${i + 1}/${prompts.length}: usando stock real de Pexels en vez de la imagen IA fallida ("${stockQuery}")...`);
+      try {
+        const videoUrl = await pexels.searchVideo(stockQuery);
+        urls.push({ type: "video", url: videoUrl });
+        onProgress(`Clip ${i + 1}/${prompts.length}: listo (stock real)`);
+      } catch (e3) {
+        // Pexels no tuvo resultado para esta consulta — mejor usar la imagen IA
+        // que ya se generó (aunque el QA la haya marcado floja) que dejar un hueco.
+        onProgress(`Clip ${i + 1}/${prompts.length}: Pexels sin resultado (${e3.message.slice(0, 60)}) — usando la imagen IA regenerada de todos modos.`);
+        urls.push({ type: "image", buffer });
       }
       continue;
     }
@@ -397,7 +449,16 @@ async function runPipeline(jobId, text, baseFilename) {
   // segmento (así el contenido se sigue viendo 100% alineado al guion) — el
   // ritmo de cortes ahora lo marca el guion real, no un valor fijo arbitrario.
   const MAX_CLIP_SECONDS = 3; // "ninguna escena debe durar más de 3 segundos" — regla estricta del prompt de Director Creativo
-  const MAX_TOTAL_CLIPS = 12; // BLINDAJE DE GASTO: máx 12 clips/reel. Con fal.ai de pago (~$0.08/clip) esto acota el costo máximo por reel a ~$1, aunque haya un bug — nunca puede dispararse a decenas de llamadas de pago.
+  // BLINDAJE DE GASTO + REGLA DE "CERO REPETICIONES": el guion dura máx 40s
+  // (límite duro del prompt de Director Creativo) y cada clip debe durar
+  // ≤3s, así que hacen falta hasta ceil(40/3)=14 clips únicos para cubrir un
+  // reel completo sin que renderVideo.js tenga que repetir ninguno (regla
+  // estricta del usuario: "jamás repitas una imagen más de 1 vez en un mismo
+  // video"). Antes el tope estaba en 12 — insuficiente para el peor caso,
+  // forzando repeticiones en reels largos. 15 da margen. El costo sigue
+  // acotado: solo los primeros MAX_PAID_CLIPS (3) son de pago (~$0.20 c/u,
+  // ~$0.60 tope); el resto son LTX-Video/Pollinations, gratis.
+  const MAX_TOTAL_CLIPS = 15;
   const totalCaptionChars = script.captions.reduce((sum, c) => sum + c.length, 0) || 1;
   // Duración estimada de cada segmento de guion (para el ritmo de clips Y para
   // sincronizar los subtítulos incrustados con lo que realmente se está diciendo).

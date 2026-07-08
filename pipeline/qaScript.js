@@ -19,6 +19,7 @@ CHECKLIST (cualquier fallo = FAIL):
 6. Cada caption afirma UN hecho/dato concreto — rechaza cualquier caption que sea reflexión vaga, pregunta retórica sin contenido nuevo, o relleno sin información ("da vueltas sin ir al grano").
 7. El cierre (último caption) resuelve la tensión del hook con una conclusión CONCRETA, no es un corte abrupto ni una idea vaga.
 8. Ningún videoPrompt describe primer plano/close-up de manos, dedos, rostro o piel humana como sujeto principal (los modelos de IA los deforman sistemáticamente) — deben usar metáforas visuales no-humanas o mostrar personas de lejos/en silueta/desenfocadas.
+9. Cada videoPrompt describe un sujeto CLARAMENTE IDENTIFICABLE que conecta obviamente con la idea del caption, sin necesidad de leer el subtítulo para entender por qué esa imagen está ahí — rechaza objetos abstractos/genéricos ("un trofeo dorado", "una textura brillante", "un objeto metálico decorativo") que no tengan relación evidente con el contenido del segmento. Prefiere siempre el sujeto más literal posible (el objeto/escena real que la frase menciona) sobre una metáfora artística, salvo que el contenido sea puramente emocional/abstracto sin sujeto físico.
 
 GUION A EVALUAR:
 ${JSON.stringify(script, null, 1).slice(0, 4000)}

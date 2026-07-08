@@ -69,21 +69,23 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
   const w = 720, h = 1280;
   const tailAfterVoice = 4;   // segundos de video que siguen después de terminar la narración
 
-  // BUG REAL reportado por el usuario: "la misma imagen se repite 7 veces,
-  // dura más de 3 segundos" — antes segDur = duration/N (duración total del
-  // audio entre el número de clips REALMENTE conseguidos). Si algún clip
-  // fallaba en cascada arriba y N terminaba siendo menor de lo esperado, CADA
-  // clip se estiraba proporcionalmente (con -stream_loop) para cubrir el
-  // hueco — un solo clip podía terminar mostrándose por 15-20s en vez de 3s,
-  // repitiéndose muchas veces seguidas. El límite de 3s por plano ahora es
-  // DURO siempre. Si faltan clips únicos para cubrir toda la duración, se
-  // reparten en "slots" que CICLAN por los clips disponibles (round-robin)
-  // en vez de estirar uno solo — la repetición queda espaciada en el tiempo,
-  // nunca la misma imagen varias veces seguidas.
-  const MAX_CLIP_SECONDS = 3;
-  const targetDurFull = duration + tailAfterVoice;
-  const numSlots = Math.max(N, Math.ceil(targetDurFull / MAX_CLIP_SECONDS));
-  const segDur = MAX_CLIP_SECONDS;
+  // REGLA ESTRICTA del usuario: "jamás repitas una imagen más de 1 vez en un
+  // mismo video" — ni siquiera espaciada. Bug real anterior: segDur =
+  // duration/N (duración total del audio entre clips REALMENTE conseguidos).
+  // Si algún clip fallaba en cascada arriba y N bajaba, cada clip se estiraba
+  // proporcionalmente para cubrir el hueco (se veía como la misma imagen
+  // repetida muchas veces). Un primer fix cicló por los clips disponibles
+  // (round-robin) para al menos espaciar la repetición — pero el usuario
+  // dejó claro que CUALQUIER repetición, aunque esté espaciada, no sirve.
+  // Ahora: CERO repeticiones, siempre — un slot por clip único, sin ciclar.
+  // Cada clip dura ~3s, pero se ajusta (dentro de un rango 2.5-4.5s) para que
+  // los N clips únicos cubran exactamente la duración total sin necesitar
+  // ni un solo duplicado. La responsabilidad de generar suficientes clips
+  // únicos para esa duración vive upstream, en server.js (ver MAX_TOTAL_CLIPS).
+  const tailPlusVoice = tailAfterVoice;
+  const targetDurFull = duration + tailPlusVoice;
+  const numSlots = N;
+  const segDur = Math.min(4.5, Math.max(2.5, targetDurFull / N));
 
   // Trucos de montaje: transición distinta en cada corte (no siempre "fade"), y
   // duración de corte más rápida al inicio (energía del hook) que hacia el cierre
@@ -118,7 +120,7 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
   //    Se agrega además un zoom lento (Ken Burns) para que ningún plano se sienta estático.
   const parts = [];
   for (let s = 0; s < numSlots; s++) {
-    const i = s % N; // ciclar por los clips disponibles si hacen falta más slots que clips únicos
+    const i = s; // sin ciclado: numSlots === N, un clip único por slot, cero repeticiones
     const part = path.join(workDir, `part${s}.mp4`);
     const clip = clips[i];
     const isImage = clip.type === "image";
@@ -152,11 +154,6 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
     // conversión de framerate correctamente (duplicando/descartando frames), preservando
     // la duración real exacta antes de que zoompan trabaje 1:1.
     const fpsNormalize = isImage ? "" : "fps=30,";
-    // realDur/duración de arranque para clips de video reciclados en un slot
-    // posterior: si se está repitiendo el mismo clip (i ya usado antes), se
-    // arranca desde un punto distinto (-ss) para que al menos se vea un
-    // fragmento diferente del mismo material, en vez del mismo frame inicial.
-    const isRepeatSlot = s >= N;
     const vf = `${fpsNormalize}scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${sw}:${sh},` +
       `zoompan=z='${zoomDir}':d=${zoomD}:s=${w}x${h}:fps=30,setsar=1,${brandGrade}${glitchFor(s)},format=yuv420p`;
 
@@ -169,7 +166,6 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
     } else {
       const realDur = probeDuration(clip.path);
       if (!realDur) throw new Error(`Slot ${s + 1}: no se pudo leer la duración real del clip fuente (archivo posiblemente corrupto)`);
-      const ss = isRepeatSlot && realDur > segDur * 1.5 ? (realDur * 0.3).toFixed(2) : null;
       if (realDur < segDur - 0.1) {
         // BUG REAL reportado por el usuario: "la animación dura 3s y luego se
         // queda quieta" — antes esto congelaba el último frame (tpad) para
@@ -178,8 +174,6 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
         // congelar, REPETIR el clip en loop (-stream_loop) hasta completar la
         // duración — el movimiento nunca se detiene, sigue vivo todo el tiempo.
         args = ["-y", "-stream_loop", "-1", "-i", clip.path, "-t", segDur.toFixed(2), "-vf", vf];
-      } else if (ss) {
-        args = ["-y", "-ss", ss, "-i", clip.path, "-t", segDur.toFixed(2), "-vf", vf];
       } else {
         args = ["-y", "-i", clip.path, "-t", segDur.toFixed(2), "-vf", vf];
       }
