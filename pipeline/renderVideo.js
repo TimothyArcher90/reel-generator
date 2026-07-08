@@ -145,12 +145,16 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
     } else {
       const realDur = probeDuration(clip.path);
       if (!realDur) throw new Error(`Clip ${i + 1}: no se pudo leer su duración real (archivo posiblemente corrupto)`);
-      args = ["-y", "-i", clip.path];
       if (realDur < segDur - 0.1) {
-        // clip más corto que segDur: congelar último frame hasta completar
-        args.push("-vf", `${vf},tpad=stop_mode=clone:stop_duration=${(segDur - realDur).toFixed(2)}`);
+        // BUG REAL reportado por el usuario: "la animación dura 3s y luego se
+        // queda quieta" — antes esto congelaba el último frame (tpad) para
+        // rellenar el resto del segmento. Un video animado real (LTX/Wan) que
+        // se congela a mitad de camino se ve roto/jarring. Fix: en vez de
+        // congelar, REPETIR el clip en loop (-stream_loop) hasta completar la
+        // duración — el movimiento nunca se detiene, sigue vivo todo el tiempo.
+        args = ["-y", "-stream_loop", "-1", "-i", clip.path, "-t", segDur.toFixed(2), "-vf", vf];
       } else {
-        args.push("-t", segDur.toFixed(2), "-vf", vf);
+        args = ["-y", "-i", clip.path, "-t", segDur.toFixed(2), "-vf", vf];
       }
       args.push("-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", part);
     }
