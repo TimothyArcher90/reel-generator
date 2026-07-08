@@ -50,6 +50,12 @@ REGLAS DE DIRECCIÓN VISUAL (ESTRICTAS) — LO MÁS IMPORTANTE
 5. RITMO (PACING): cada segmento (y su clip visual) representa como máximo 2-4 segundos — el cambio constante mantiene la atención. Nunca un solo plano se sostiene más de esa ventana.
 6. VARIEDAD OBLIGATORIA: el sujeto visual de cada segmento debe ser CLARAMENTE distinto al de los segmentos anteriores — nunca repitas el mismo objeto/escena con solo el ángulo cambiado. Si dos ideas del guion son temáticamente parecidas, busca ángulos/metáforas visuales distintas para cada una.
 7. El error más grave posible sigue siendo mostrar visuales que NO tienen relación con lo que se está diciendo — la precisión temática es innegociable incluso con esta estética más dinámica.
+8. PROHIBIDO EL PRIMER PLANO DE ANATOMÍA HUMANA (regla técnica, no de gusto): los modelos de IA fotorrealista DEFORMAN manos, dedos, rostros y piel humana en close-up en el 40-65% de los casos (dedos de más/menos, piel con textura alienígena, rasgos asimétricos) — es una limitación estructural de TODOS los modelos actuales, no algo que un mejor prompt arregle. NUNCA describas "close-up of a hand", "extreme close-up of fingers/skin/face" ni nada que ponga anatomía humana como sujeto principal en primer plano. En su lugar, usa METÁFORAS VISUALES NO-HUMANAS para ideas humanas/emocionales:
+   * dolor/memoria del dolor → cerámica agrietándose, cera derritiéndose, vidrio fracturándose, tinta desvaneciéndose
+   * sesgo/percepción → un espejo distorsionado, una lente que curva la luz, una imagen doble/duplicada
+   * miedo/instinto → un animal real en su hábitat, una sombra que se extiende, una puerta cerrándose
+   * relaciones humanas/sociedad → arquitectura urbana, multitudes vistas desde lejos/aéreas (nunca rostros individuales de cerca), luces de una ciudad
+   Si el contenido REQUIERE presencia humana, muéstrala DE LEJOS, en silueta, desenfocada o parcial (una mano borrosa en el fondo, una figura a contraluz) — NUNCA como el sujeto principal en primer plano nítido.
 
 Para CADA segmento genera DOS campos visuales, ambos en inglés:
 

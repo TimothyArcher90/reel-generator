@@ -18,6 +18,7 @@ CHECKLIST (cualquier fallo = FAIL):
 5. Los videoPrompts varían entre sí (no se repite el mismo sujeto en segmentos consecutivos).
 6. Cada caption afirma UN hecho/dato concreto — rechaza cualquier caption que sea reflexión vaga, pregunta retórica sin contenido nuevo, o relleno sin información ("da vueltas sin ir al grano").
 7. El cierre (último caption) resuelve la tensión del hook con una conclusión CONCRETA, no es un corte abrupto ni una idea vaga.
+8. Ningún videoPrompt describe primer plano/close-up de manos, dedos, rostro o piel humana como sujeto principal (los modelos de IA los deforman sistemáticamente) — deben usar metáforas visuales no-humanas o mostrar personas de lejos/en silueta/desenfocadas.
 
 GUION A EVALUAR:
 ${JSON.stringify(script, null, 1).slice(0, 4000)}
