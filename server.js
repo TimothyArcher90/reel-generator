@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const path    = require("path");
 const fs      = require("fs");
+const axios   = require("axios");
 
 // Red de seguridad global: un rechazo de promesa sin manejar en CUALQUIER
 // parte del código (no solo withTimeout, cualquier otro que se nos escape)
@@ -92,9 +93,29 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
     // Wan 480p (~$0.20). Es lo que convierte la imagen fija en movimiento real.
     if (falVideo.isConfigured() && paidCount < MAX_PAID_CLIPS) {
       try {
-        onProgress(`Clip ${i + 1}/${prompts.length}: generando + animando con IA de pago (fal.ai, ${paidCount + 1}/${MAX_PAID_CLIPS})...`);
+        onProgress(`Clip ${i + 1}/${prompts.length}: generando frame con IA de pago (fal FLUX, ~$0.003)...`);
         const imgUrl = await withTimeout(falVideo.generateImageUrl(videoPrompt), 60000, "fal flux timeout");
-        const videoUrl = await withTimeout(falVideo.animateProductUrl(imgUrl, videoPrompt), 120000, "fal.ai timeout");
+        // CONTROL DE CALIDAD ANTES DE GASTAR EN ANIMAR (pedido explícito del
+        // usuario tras perder crédito en imágenes malas sin filtro): el frame
+        // de FLUX cuesta centavos; animarlo con Wan cuesta $0.20. Se verifica
+        // AQUÍ, antes del paso caro, para no pagar por animar algo genérico o
+        // que no ilustra el guion. Un solo reintento (otros ~$0.003) si falla.
+        const captionForQA = (typeof prompts[i] === "object" && prompts[i].caption) || videoPrompt;
+        const { data: imgBuf } = await axios.get(imgUrl, { responseType: "arraybuffer", timeout: 20000 });
+        let qaOk = true;
+        try {
+          const qa = await withTimeout(qaImage(Buffer.from(imgBuf), captionForQA), 20000, "QA imagen timeout");
+          qaOk = qa.pass;
+          if (!qaOk) onProgress(`Clip ${i + 1}/${prompts.length}: frame de pago rechazado por control de calidad (${qa.reason}) — regenerando frame...`);
+        } catch (e) { /* QA no disponible — seguir, no vale la pena bloquear un clip de pago por esto */ }
+
+        let finalImgUrl = imgUrl;
+        if (!qaOk) {
+          finalImgUrl = await withTimeout(falVideo.generateImageUrl(videoPrompt), 60000, "fal flux timeout");
+        }
+
+        onProgress(`Clip ${i + 1}/${prompts.length}: animando con IA de pago (fal.ai Wan, ${paidCount + 1}/${MAX_PAID_CLIPS})...`);
+        const videoUrl = await withTimeout(falVideo.animateProductUrl(finalImgUrl, videoPrompt), 120000, "fal.ai timeout");
         paidCount++;
         urls.push({ type: "video", url: videoUrl });
         onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real - fal.ai)`);
@@ -333,11 +354,28 @@ async function runPipeline(jobId, text, baseFilename) {
   // Duración estimada de cada segmento de guion (para el ritmo de clips Y para
   // sincronizar los subtítulos incrustados con lo que realmente se está diciendo).
   const segmentDurations = script.captions.map(c => Math.max(2, duration * (c.length / totalCaptionChars)));
+  // VARIACIÓN ENTRE SUB-CLIPS (bug real reportado: cuando un segmento largo se
+  // divide en varios clips de ≤3s, antes TODOS usaban el prompt EXACTO — la
+  // IA genera imágenes casi idénticas para el mismo prompt, así que aunque
+  // técnicamente son clips distintos, se ve/siente como "una sola imagen que
+  // no cambia". Se le agrega una variación de encuadre/momento a cada
+  // sub-clip (menos al primero) para que la escena avance visualmente en vez
+  // de repetirse.
+  const SHOT_VARIATIONS = [
+    "", // el primero: el prompt tal cual, es el más importante
+    ", camera has moved to a slightly different angle, same subject continues",
+    ", a closer detail of the same scene, subject has moved slightly, different framing",
+    ", the scene has progressed further, new perspective on the same subject",
+    ", extreme close-up detail shot of the same subject, different focal point"
+  ];
   const visualPrompts = [];
   segmentPrompts.forEach((p, i) => {
     const estSegDur = segmentDurations[i];
     const nSubClips = Math.max(1, Math.round(estSegDur / MAX_CLIP_SECONDS));
-    for (let k = 0; k < nSubClips; k++) visualPrompts.push(p);
+    for (let k = 0; k < nSubClips; k++) {
+      const variation = SHOT_VARIATIONS[k % SHOT_VARIATIONS.length];
+      visualPrompts.push(variation ? { ...p, video: p.video + variation } : p);
+    }
   });
   if (visualPrompts.length > MAX_TOTAL_CLIPS) {
     // Recortar proporcionalmente en vez de cortar en seco al final (eso dejaría

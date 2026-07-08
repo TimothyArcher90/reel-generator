@@ -32,7 +32,13 @@ function mdToAssText(caption) {
 
 // captions: array de segmentos (texto con **negritas**). segmentDurations:
 // array paralelo con la duración estimada (segundos) de cada segmento.
-function buildAss({ captions, segmentDurations, fontName = "Playfair Display", fontSize = 46 }) {
+function buildAss({ captions, segmentDurations, fontName = "Playfair Display", fontSize = 42 }) {
+  // LEGIBILIDAD (feedback real del usuario: "no se ven, o se quitan"): la caja
+  // de fondo antes era &H60 de alfa (~62% transparente) — invisible sobre
+  // imágenes con brillo/detalle. ASS usa alfa invertido (00=opaco, FF=
+  // transparente), así que &H20 = ~87% opaca — casi una franja sólida negra
+  // detrás del texto, legible sobre cualquier fondo. BorderStyle=3 = caja
+  // opaca (no solo contorno). MarginV subido para no chocar con los bordes.
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: 720
@@ -42,7 +48,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${fontName},${fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H60000000,0,0,0,0,100,100,0,0,3,0,0,5,70,70,0,1
+Style: Default,${fontName},${fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H20000000,0,0,0,0,100,100,0,0,3,8,0,5,50,50,120,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
