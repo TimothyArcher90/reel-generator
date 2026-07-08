@@ -12,10 +12,12 @@ async function qaScript(script) {
 
 CHECKLIST (cualquier fallo = FAIL):
 1. Ningún videoPrompt describe una imagen ESTÁTICA ("a picture of", "an image of", sin movimiento) — todos deben describir movimiento/animación real.
-2. El hook (captions[0]) genera tensión/curiosidad real, no es una introducción genérica.
-3. Cada videoPrompt es específico y visual, no abstracto/vago ("energy", "concept", "power" solos no cuentan).
-4. Los videoPrompts varían entre sí (no se repite el mismo sujeto en segmentos consecutivos).
-5. El cierre (último caption) resuelve la tensión del hook, no es un corte abrupto.
+2. Ningún videoPrompt describe un estilo NO fotorrealista ("3D render", "illustration", "vector art", "paper-cut", "cartoon", "animated style") — TODOS deben ser fotografía hiperrealista (regla estricta del usuario, sin excepciones).
+3. El hook (captions[0]) genera tensión/curiosidad real, no es una introducción genérica.
+4. Cada videoPrompt es específico y visual, no abstracto/vago ("energy", "concept", "power" solos no cuentan).
+5. Los videoPrompts varían entre sí (no se repite el mismo sujeto en segmentos consecutivos).
+6. Cada caption afirma UN hecho/dato concreto — rechaza cualquier caption que sea reflexión vaga, pregunta retórica sin contenido nuevo, o relleno sin información ("da vueltas sin ir al grano").
+7. El cierre (último caption) resuelve la tensión del hook con una conclusión CONCRETA, no es un corte abrupto ni una idea vaga.
 
 GUION A EVALUAR:
 ${JSON.stringify(script, null, 1).slice(0, 4000)}

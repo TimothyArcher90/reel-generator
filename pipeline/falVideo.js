@@ -73,17 +73,26 @@ async function animateProductUrl(productImageUrl, motionPrompt) {
 // nos bloquea constantemente). Devuelve la URL pública de la imagen, lista para
 // pasarla directo a animateProductUrl (sin re-subir). Solo tiene sentido usar
 // esto cuando ya vamos a pagar la animación de todos modos.
-// FLUX schnell NO soporta negative_prompt (verificado en su schema real) — el
-// refuerzo contra el look apagado/genérico va en el prompt POSITIVO (ver el
-// cierre obligatorio "vibrant saturated color..." en generateScript.js).
+//
+// MODELO: fal-ai/flux-pro/v1.1 (NO flux/schnell). Bug real reportado por el
+// usuario: las imágenes salían con un look "de render 3D/térmico", nada
+// realista (ej. un cerebro con colores de mapa de calor). Investigación
+// verificada: Schnell está optimizado para VELOCIDAD (1-4 pasos de difusión)
+// y por diseño produce ese look "3D/animado" — Dev y Pro usan muchos más
+// pasos y SÍ logran piel/texturas/iluminación fotorrealistas reales. Pro
+// cuesta ~$0.04/megapixel (~$0.04-0.08 por imagen) — insignificante frente a
+// los $0.20 de animar cada clip, así que no hay razón para escatimar aquí.
+// FLUX (ninguna variante) soporta negative_prompt — verificado en su schema
+// real — el refuerzo de realismo va en el prompt POSITIVO (generateScript.js
+// ahora exige explícitamente "hyper-realistic photograph").
 async function generateImageUrl(prompt) {
   ensureConfigured();
-  const result = await fal.subscribe("fal-ai/flux/schnell", {
+  const result = await fal.subscribe("fal-ai/flux-pro/v1.1", {
     input: { prompt, image_size: "portrait_16_9", num_images: 1 },
     logs: false
   });
   const url = result?.data?.images?.[0]?.url || result?.images?.[0]?.url;
-  if (!url) throw new Error("fal flux: respuesta sin imagen — " + JSON.stringify(result).slice(0, 300));
+  if (!url) throw new Error("fal flux-pro: respuesta sin imagen — " + JSON.stringify(result).slice(0, 300));
   return url;
 }
 

@@ -20,6 +20,7 @@ async function qaImage(imageBuffer, segmentText) {
 
 Evalúa RÁPIDO y con criterio ESTRICTO:
 - ¿Es una imagen nítida, de alta calidad, cinematográfica (no borrosa, no rota, no con artefactos raros)?
+- ¿PARECE UNA FOTOGRAFÍA REAL (hiperrealista, con luz e imperfecciones reales)? RECHAZA si se ve como render 3D, ilustración, mapa de calor/térmico, arte vectorial o cualquier estilo gráfico/artificial — el usuario exige fotorrealismo estricto, sin excepciones.
 - ¿Tiene relación temática real con la idea del segmento (no genérica/random)?
 - ¿Se ve profesional/atractiva, no barata?
 
