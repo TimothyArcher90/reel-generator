@@ -65,10 +65,25 @@ function escapeForFilter(p) {
 
 async function renderVideo({ clips, audioFile, duration, outPath, assPath, fontsDir, onProgress = () => {} }) {
   const N = clips.length;
-  const segDur = Math.max(3, duration / N);
   const workDir = path.dirname(clips[0].path);
   const w = 720, h = 1280;
   const tailAfterVoice = 4;   // segundos de video que siguen después de terminar la narración
+
+  // BUG REAL reportado por el usuario: "la misma imagen se repite 7 veces,
+  // dura más de 3 segundos" — antes segDur = duration/N (duración total del
+  // audio entre el número de clips REALMENTE conseguidos). Si algún clip
+  // fallaba en cascada arriba y N terminaba siendo menor de lo esperado, CADA
+  // clip se estiraba proporcionalmente (con -stream_loop) para cubrir el
+  // hueco — un solo clip podía terminar mostrándose por 15-20s en vez de 3s,
+  // repitiéndose muchas veces seguidas. El límite de 3s por plano ahora es
+  // DURO siempre. Si faltan clips únicos para cubrir toda la duración, se
+  // reparten en "slots" que CICLAN por los clips disponibles (round-robin)
+  // en vez de estirar uno solo — la repetición queda espaciada en el tiempo,
+  // nunca la misma imagen varias veces seguidas.
+  const MAX_CLIP_SECONDS = 3;
+  const targetDurFull = duration + tailAfterVoice;
+  const numSlots = Math.max(N, Math.ceil(targetDurFull / MAX_CLIP_SECONDS));
+  const segDur = MAX_CLIP_SECONDS;
 
   // Trucos de montaje: transición distinta en cada corte (no siempre "fade"), y
   // duración de corte más rápida al inicio (energía del hook) que hacia el cierre
@@ -76,7 +91,7 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
   // El primer corte usa "fadewhite" (flash blanco) para un golpe de energía extra.
   const transitionTypes = ["fade", "wipeleft", "circleopen", "slideup", "wiperight", "diagtl"];
   const transTypeFor = cutIndex => cutIndex === 0 ? "fadewhite" : transitionTypes[cutIndex % transitionTypes.length];
-  const transDurFor = cutIndex => (cutIndex < 2 ? 0.25 : cutIndex >= N - 3 ? 0.6 : 0.4);
+  const transDurFor = cutIndex => (cutIndex < 2 ? 0.25 : cutIndex >= numSlots - 3 ? 0.6 : 0.4);
 
   // Look de marca por clip (todo gratis, ffmpeg puro, cero costo de API):
   //  - colorbalance: empuja medios/altas luces hacia dorado/ámbar, sombras más frías —
@@ -102,16 +117,20 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
   //    si es más largo, se recorta. Siempre queda en exactamente segDur.
   //    Se agrega además un zoom lento (Ken Burns) para que ningún plano se sienta estático.
   const parts = [];
-  for (let i = 0; i < N; i++) {
-    const part = path.join(workDir, `part${i}.mp4`);
+  for (let s = 0; s < numSlots; s++) {
+    const i = s % N; // ciclar por los clips disponibles si hacen falta más slots que clips únicos
+    const part = path.join(workDir, `part${s}.mp4`);
     const clip = clips[i];
     const isImage = clip.type === "image";
 
     const zoomFrames = Math.round(segDur * 30);
-    // El hook (primer segmento) lleva un zoom-in más marcado y rápido para que el
-    // "pattern interrupt" pegue más fuerte; el resto alterna un zoom sutil in/out.
-    const zoomRate = i === 0 ? "0.0022" : "0.0006";
-    const zoomDir = i === 0 || i % 2 === 0 ? `zoom+${zoomRate}` : `zoom-${zoomRate}`;
+    // El hook (primer plano de todo el reel) lleva un zoom-in más marcado y rápido
+    // para que el "pattern interrupt" pegue más fuerte; el resto alterna un zoom
+    // sutil in/out. Se indexa por SLOT (s), no por clip único (i), para que una
+    // repetición del mismo clip en un slot distinto al menos se vea con un zoom
+    // diferente en vez de exactamente el mismo movimiento.
+    const zoomRate = s === 0 ? "0.0022" : "0.0006";
+    const zoomDir = s === 0 || s % 2 === 0 ? `zoom+${zoomRate}` : `zoom-${zoomRate}`;
     // Escala a 1.25x (antes 2x) — suficiente margen para el zoom Ken Burns pero
     // procesa mucho más rápido; el zoompan sigue reduciendo a la salida final wxh.
     const sw = Math.round(w * 1.25), sh = Math.round(h * 1.25);
@@ -133,8 +152,13 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
     // conversión de framerate correctamente (duplicando/descartando frames), preservando
     // la duración real exacta antes de que zoompan trabaje 1:1.
     const fpsNormalize = isImage ? "" : "fps=30,";
+    // realDur/duración de arranque para clips de video reciclados en un slot
+    // posterior: si se está repitiendo el mismo clip (i ya usado antes), se
+    // arranca desde un punto distinto (-ss) para que al menos se vea un
+    // fragmento diferente del mismo material, en vez del mismo frame inicial.
+    const isRepeatSlot = s >= N;
     const vf = `${fpsNormalize}scale=${sw}:${sh}:force_original_aspect_ratio=increase,crop=${sw}:${sh},` +
-      `zoompan=z='${zoomDir}':d=${zoomD}:s=${w}x${h}:fps=30,setsar=1,${brandGrade}${glitchFor(i)},format=yuv420p`;
+      `zoompan=z='${zoomDir}':d=${zoomD}:s=${w}x${h}:fps=30,setsar=1,${brandGrade}${glitchFor(s)},format=yuv420p`;
 
     let args;
     if (isImage) {
@@ -144,7 +168,8 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
         "-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", part];
     } else {
       const realDur = probeDuration(clip.path);
-      if (!realDur) throw new Error(`Clip ${i + 1}: no se pudo leer su duración real (archivo posiblemente corrupto)`);
+      if (!realDur) throw new Error(`Slot ${s + 1}: no se pudo leer la duración real del clip fuente (archivo posiblemente corrupto)`);
+      const ss = isRepeatSlot && realDur > segDur * 1.5 ? (realDur * 0.3).toFixed(2) : null;
       if (realDur < segDur - 0.1) {
         // BUG REAL reportado por el usuario: "la animación dura 3s y luego se
         // queda quieta" — antes esto congelaba el último frame (tpad) para
@@ -153,17 +178,19 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
         // congelar, REPETIR el clip en loop (-stream_loop) hasta completar la
         // duración — el movimiento nunca se detiene, sigue vivo todo el tiempo.
         args = ["-y", "-stream_loop", "-1", "-i", clip.path, "-t", segDur.toFixed(2), "-vf", vf];
+      } else if (ss) {
+        args = ["-y", "-ss", ss, "-i", clip.path, "-t", segDur.toFixed(2), "-vf", vf];
       } else {
         args = ["-y", "-i", clip.path, "-t", segDur.toFixed(2), "-vf", vf];
       }
       args.push("-an", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "24", part);
     }
 
-    onProgress(`Procesando clip ${i + 1}/${N} (ffmpeg)...`);
-    await run(args, `clip ${i + 1}`, 60000);
+    onProgress(`Procesando clip ${s + 1}/${numSlots} (ffmpeg)...`);
+    await run(args, `clip ${s + 1}`, 60000);
     const partDur = probeDuration(part);
     if (partDur < segDur - 0.5) {
-      throw new Error(`Clip ${i + 1}: quedó en ${partDur.toFixed(1)}s, se esperaban ${segDur.toFixed(1)}s — revisar el clip fuente`);
+      throw new Error(`Slot ${s + 1}: quedó en ${partDur.toFixed(1)}s, se esperaban ${segDur.toFixed(1)}s — revisar el clip fuente`);
     }
     parts.push(part);
   }
@@ -184,8 +211,8 @@ async function renderVideo({ clips, audioFile, duration, outPath, assPath, fonts
   const acc = path.join(workDir, "concat.mp4");
   await run(["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", acc], "concat clips", 60000);
   let accDur = probeDuration(acc);
-  if (accDur < N * segDur - 1) {
-    throw new Error(`Concat: quedó en ${accDur.toFixed(1)}s, se esperaban ~${(N * segDur).toFixed(1)}s`);
+  if (accDur < numSlots * segDur - 1) {
+    throw new Error(`Concat: quedó en ${accDur.toFixed(1)}s, se esperaban ~${(numSlots * segDur).toFixed(1)}s`);
   }
 
   // 3. Extender el video (congelando el último frame) hasta cubrir audio + cola de

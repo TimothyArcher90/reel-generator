@@ -53,6 +53,20 @@ const useLTXVideo = true;
 //      solo sin movimiento propio del modelo de video.
 //   3. Solo si Pollinations también falla: video de stock de Pexels (red de
 //      seguridad final, nunca debe colgar el pipeline).
+// SISTEMA DE PRIORIDAD IA vs STOCK (pedido explícito del usuario: "si sabes
+// que no lo puedes generar bien, no lo generes, usa imágenes de archivo para
+// eso"). Igual que con manos/rostros en primer plano, TODOS los modelos de
+// difusión actuales fallan sistemáticamente al generar personas en movimiento
+// de cuerpo completo (correr, caminar, saltar, multitudes) — piernas/brazos
+// de más o menos, marcha antinatural, fusión de cuerpos en grupos. Para estos
+// temas el video de stock real (Pexels) es SIEMPRE mejor que la IA, así que
+// se usa DIRECTO sin ni siquiera intentar generar con IA primero — evita
+// gastar tiempo/crédito en un resultado que ya se sabe que va a salir mal.
+const HUMAN_MOTION_REGEX = /\b(running|runner|jogging|sprint(?:ing)?|walking|walker|dancing|dancer|jumping|marathon|crowd|group of people|people (?:walking|running)|athlete|pedestrians?)\b/i;
+function isHumanMotionSubject(text) {
+  return HUMAN_MOTION_REGEX.test(text || "");
+}
+
 async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
   const urls = [];
   const clipDuration = Math.min(2, segDurSeconds); // límite real probado del Space (ver ltxSpace.js)
@@ -68,6 +82,20 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
     const p = prompts[i];
     const videoPrompt = typeof p === "string" ? p : p.video;
     const stockQuery  = typeof p === "string" ? p : (p.stock || p.video);
+
+    // PRIORIDAD 1: sujeto que la IA deforma sistemáticamente (persona en
+    // movimiento de cuerpo completo) — stock real directo, sin intentar IA.
+    if (isHumanMotionSubject(videoPrompt)) {
+      try {
+        onProgress(`Clip ${i + 1}/${prompts.length}: sujeto es una persona en movimiento (la IA deforma esto de forma sistemática) — usando video de stock real ("${stockQuery}")...`);
+        const videoUrl = await pexels.searchVideo(stockQuery);
+        urls.push({ type: "video", url: videoUrl });
+        onProgress(`Clip ${i + 1}/${prompts.length}: listo (stock real)`);
+        continue;
+      } catch (e) {
+        onProgress(`Clip ${i + 1}/${prompts.length}: stock no disponible (${e.message.slice(0, 60)}) — probando con IA como respaldo...`);
+      }
+    }
 
     try {
       onProgress(`Clip ${i + 1}/${prompts.length}: generando video real con IA (LTX-Video, gratis)...`);
@@ -140,11 +168,31 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
         }
       } catch (e) { /* QA no disponible — seguir con la imagen ya generada */ }
     } catch (e) {
-      // Ni la imagen gratis se pudo — último recurso: stock de Pexels.
+      // Ni la imagen gratis se pudo — último recurso: stock de Pexels. Este
+      // catch va envuelto en SU PROPIO try/catch (bug real: si pexels.searchVideo
+      // también fallaba —sin resultados, API caída—, la excepción se escapaba SIN
+      // capturar y tumbaba TODO el bucle, dejando el reel con menos clips de los
+      // esperados; eso hacía que renderVideo.js estirara los pocos clips
+      // restantes por mucho más de 3s cada uno para cubrir el audio completo —
+      // la causa real de "la misma imagen se repite muchas veces").
       onProgress(`Clip ${i + 1}/${prompts.length}: imagen IA sin respuesta — video de stock de Pexels ("${stockQuery}")`);
-      const videoUrl = await pexels.searchVideo(stockQuery);
-      urls.push({ type: "video", url: videoUrl });
-      onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
+      try {
+        const videoUrl = await pexels.searchVideo(stockQuery);
+        urls.push({ type: "video", url: videoUrl });
+        onProgress(`Clip ${i + 1}/${prompts.length}: listo`);
+      } catch (e2) {
+        // Pexels también falló (sin resultados para esa consulta, API caída) —
+        // último respaldo genérico para NUNCA dejar un hueco en el reel: una
+        // imagen abstracta segura (nunca personas/anatomía) que al menos
+        // mantiene el ritmo visual sin arriesgar un resultado deformado.
+        onProgress(`Clip ${i + 1}/${prompts.length}: Pexels también sin resultado (${e2.message.slice(0, 60)}) — imagen abstracta genérica de respaldo...`);
+        const genericBuffer = await pollinationsImage.generateImage(
+          "abstract flowing light and color, cinematic, hyper-realistic photograph, dark editorial aesthetic with warm gold accent, 9:16 vertical, no people, no text",
+          70000
+        );
+        urls.push({ type: "image", buffer: genericBuffer });
+        onProgress(`Clip ${i + 1}/${prompts.length}: listo (respaldo genérico)`);
+      }
       continue;
     }
 
