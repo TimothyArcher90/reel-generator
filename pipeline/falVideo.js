@@ -26,33 +26,22 @@ function ensureConfigured() {
   fal.config({ credentials: key });
 }
 
-// imagePathOrBuffer: ruta local o Buffer de la imagen a animar (primer frame).
-// motionPrompt: descripción en inglés del movimiento/escena deseada.
-// durationHint: se registra pero Wan controla su propia duración (~5s); el
-// render luego recorta/ajusta a lo que necesite cada segmento.
-async function animateImage(imagePathOrBuffer, motionPrompt) {
-  ensureConfigured();
-  const buffer = Buffer.isBuffer(imagePathOrBuffer)
-    ? imagePathOrBuffer
-    : fs.readFileSync(imagePathOrBuffer);
-  // Subir la imagen al storage de fal para obtener una URL pública que el
-  // modelo pueda leer (evita depender de que la imagen ya esté hospedada).
-  const blob = new Blob([buffer], { type: "image/jpeg" });
-  const imageUrl = await fal.storage.upload(blob);
+// Negative prompt de Wan (verificado que existe en su schema real vía
+// openapi.json) — refuerza contra el look apagado/genérico que reportó el
+// usuario, además de artefactos típicos de animación barata.
+const WAN_NEGATIVE_PROMPT = "dull, muted colors, flat lighting, generic stock photo, low contrast, plastic look, static, blurry, distorted, watermark, text, logo, low quality";
 
+// Parámetros de ahorro de costo COMPARTIDOS por ambas funciones (BUG REAL
+// corregido: antes solo animateImage() tenía resolution=480p/num_frames=81,
+// pero el pipeline real usa animateProductUrl(), que no los tenía — cada clip
+// pagado se estaba cobrando a 720p ($0.40) en vez de 480p ($0.20), EL DOBLE
+// del costo pretendido). Wan cobra POR VIDEO, no por segundo: 480p=$0.20 vs
+// 720p=$0.40. num_frames=81 es el mínimo que evita el recargo de 1.25x.
+const WAN_COST_PARAMS = { resolution: "480p", aspect_ratio: "9:16", num_frames: 81 };
+
+async function callWan(imageUrl, motionPrompt) {
   const result = await fal.subscribe("fal-ai/wan-i2v", {
-    input: {
-      prompt: motionPrompt,
-      image_url: imageUrl,
-      // AHORRO DE COSTO (verificado en la doc de fal): Wan cobra POR VIDEO, no
-      // por segundo. 480p = $0.20 (0.5 unidades) vs 720p = $0.40 (1 unidad) —
-      // la MITAD de precio. El reel final es vertical 720x1280 y el render lo
-      // reescala igual, así que 480p animado se ve bien y cuesta la mitad.
-      // num_frames=81 es el mínimo que EVITA el recargo de 1.25x (>81 frames).
-      resolution: "480p",
-      aspect_ratio: "9:16",
-      num_frames: 81
-    },
+    input: { prompt: motionPrompt, image_url: imageUrl, negative_prompt: WAN_NEGATIVE_PROMPT, ...WAN_COST_PARAMS },
     logs: false
   });
   const url = result?.data?.video?.url || result?.video?.url;
@@ -60,17 +49,23 @@ async function animateImage(imagePathOrBuffer, motionPrompt) {
   return url;
 }
 
-// Variante para inserción de producto: recibe directamente la URL pública de la
-// foto del producto (sin re-subir) y la anima.
+// imagePathOrBuffer: ruta local o Buffer de la imagen a animar (primer frame).
+async function animateImage(imagePathOrBuffer, motionPrompt) {
+  ensureConfigured();
+  const buffer = Buffer.isBuffer(imagePathOrBuffer)
+    ? imagePathOrBuffer
+    : fs.readFileSync(imagePathOrBuffer);
+  const blob = new Blob([buffer], { type: "image/jpeg" });
+  const imageUrl = await fal.storage.upload(blob);
+  return callWan(imageUrl, motionPrompt);
+}
+
+// Variante para inserción de producto (o cualquier imagen ya generada por
+// fal FLUX): recibe directamente la URL pública (sin re-subir) y la anima.
+// Esta es la que usa el pipeline principal (server.js).
 async function animateProductUrl(productImageUrl, motionPrompt) {
   ensureConfigured();
-  const result = await fal.subscribe("fal-ai/wan-i2v", {
-    input: { prompt: motionPrompt, image_url: productImageUrl },
-    logs: false
-  });
-  const url = result?.data?.video?.url || result?.video?.url;
-  if (!url) throw new Error("fal wan-i2v: respuesta sin video — " + JSON.stringify(result).slice(0, 300));
-  return url;
+  return callWan(productImageUrl, motionPrompt);
 }
 
 // Genera la imagen del primer frame con FLUX schnell en fal (~$0.003, casi
@@ -78,6 +73,9 @@ async function animateProductUrl(productImageUrl, motionPrompt) {
 // nos bloquea constantemente). Devuelve la URL pública de la imagen, lista para
 // pasarla directo a animateProductUrl (sin re-subir). Solo tiene sentido usar
 // esto cuando ya vamos a pagar la animación de todos modos.
+// FLUX schnell NO soporta negative_prompt (verificado en su schema real) — el
+// refuerzo contra el look apagado/genérico va en el prompt POSITIVO (ver el
+// cierre obligatorio "vibrant saturated color..." en generateScript.js).
 async function generateImageUrl(prompt) {
   ensureConfigured();
   const result = await fal.subscribe("fal-ai/flux/schnell", {

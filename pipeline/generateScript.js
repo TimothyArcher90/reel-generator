@@ -42,18 +42,23 @@ REGLAS DEL GUION (español):
 REGLAS DE DIRECCIÓN VISUAL (ESTRICTAS) — LO MÁS IMPORTANTE
 ═══════════════════════════════════════════════════════════════════
 1. PROHIBIDO LO ESTÁTICO: jamás describas "una imagen de X" o "una foto de X". Cada videoPrompt debe describir una ANIMACIÓN, un MOVIMIENTO DE CÁMARA (zoom in/out, panning, parallax, dolly, orbit) o un DISEÑO DE INFORMACIÓN DINÁMICO (un gráfico que se dibuja, una línea que avanza, un número que sube). Todo se mueve, nada es una foto quieta.
-2. ESTÉTICA VISUAL: prioriza mapas vectoriales, gráficos de líneas estilo neón, recortes 3D (paper-cut / 3D cutout), texturas de papel antiguo, gráficos de velas financieras (candlestick charts), diagramas minimalistas — combinado con macro-fotografía cinematográfica cuando el contenido sea más orgánico (ciencia, naturaleza, biología). Nunca fuerces un tema tecnológico/financiero si el contenido no lo es: el sujeto visual de cada segmento LO DICTA el contenido de ESE segmento.
-3. RITMO (PACING): cada segmento (y su clip visual) representa como máximo 2-4 segundos — el cambio constante mantiene la atención. Nunca un solo plano se sostiene más de esa ventana.
-4. El error más grave posible sigue siendo mostrar visuales que NO tienen relación con lo que se está diciendo — la precisión temática es innegociable incluso con esta estética más dinámica.
+2. ESTÉTICA VISUAL — "cinematic micro-movie" (el estilo que en 2026 más retiene para contenido intelectual/editorial, por encima del stock genérico): prioriza mapas vectoriales, gráficos de líneas estilo neón, recortes 3D (paper-cut / 3D cutout), texturas de papel antiguo, gráficos de velas financieras (candlestick charts), diagramas minimalistas — combinado con macro-fotografía cinematográfica cuando el contenido sea más orgánico (ciencia, naturaleza, biología). Nunca fuerces un tema tecnológico/financiero si el contenido no lo es: el sujeto visual de cada segmento LO DICTA el contenido de ESE segmento.
+3. PROHIBIDO EL LOOK GENÉRICO/APAGADO: cada videoPrompt debe especificar las 6 capas siguientes, nunca quedarse en una descripción vaga — (a) sujeto concreto, (b) estilo visual (cinematic / vector art / 3D render / macro photography), (c) entorno, (d) fuente de luz literal, (e) composición/encuadre, (f) acabado de calidad. Un prompt vago ("dna helix") produce una imagen sosa; uno específico en las 6 capas produce una imagen que se ve premium.
+4. COLOR: exige explícitamente color VIBRANTE y SATURADO (nunca tonos apagados/grises/planos) pero sin caer en el look plástico de IA barata — combina "vibrant saturated color" con "natural texture, imperfections, film grain" para que no se vea artificial.
+5. RITMO (PACING): cada segmento (y su clip visual) representa como máximo 2-4 segundos — el cambio constante mantiene la atención. Nunca un solo plano se sostiene más de esa ventana.
+6. VARIEDAD OBLIGATORIA: el sujeto visual de cada segmento debe ser CLARAMENTE distinto al de los segmentos anteriores — nunca repitas el mismo objeto/escena con solo el ángulo cambiado. Si dos ideas del guion son temáticamente parecidas, busca ángulos/metáforas visuales distintas para cada una.
+7. El error más grave posible sigue siendo mostrar visuales que NO tienen relación con lo que se está diciendo — la precisión temática es innegociable incluso con esta estética más dinámica.
 
 Para CADA segmento genera DOS campos visuales, ambos en inglés:
 
-1) videoPrompts[i] — descripción cinematográfica de una ESCENA EN MOVIMIENTO (para un modelo de IA de video), siguiendo las reglas de arriba:
+1) videoPrompts[i] — descripción cinematográfica de una ESCENA EN MOVIMIENTO (para un modelo de IA de video), cubriendo las 6 capas de la regla 3 arriba:
    - Tipo de plano (Extreme close-up / Close-up / Medium / Wide / Aerial drone / Low-angle)
    - El SUJETO CONCRETO que representa la idea de ESE segmento (sale del contenido, no de una lista) descrito como algo que se anima/dibuja/mueve
+   - Estilo visual explícito (cinematic photorealistic / vector line art / 3D render / macro photography — el que mejor sirva al sujeto)
+   - Entorno/fondo concreto
    - Una fuente de luz descrita literalmente
    - Movimiento de cámara explícito (camera pushes in / pulls back / orbits / glides / tilts up / parallax pan) + qué se anima dentro de la escena (una línea que se traza, partículas que fluyen, un gráfico que crece)
-   - Cierra con: "cinematic lighting, high contrast, dark editorial aesthetic with a warm gold accent, sharp focus, 9:16 vertical, photorealistic, 8k, no text, no logos, in motion, animated"
+   - Cierra SIEMPRE con: "vibrant saturated color, natural texture, cinematic lighting, high contrast, dark editorial aesthetic with a warm gold accent, sharp focus, 9:16 vertical, photorealistic, 8k, no text, no logos, in motion, animated"
 
 2) stockQueries[i] — 2 a 4 palabras EN INGLÉS, CONCRETAS Y COMUNES, que un banco de video de stock (tipo Pexels) SÍ tenga — este es el respaldo si la IA de video falla, así que debe describir un objeto/escena real y filmable (no necesita ser el diseño vectorial/neón, solo temáticamente relacionado). Piensa: "¿qué escribiría alguien en un buscador de video de stock para encontrar un clip que ilustre esta frase?".
    Ejemplos de buenos stockQueries según el tema:
