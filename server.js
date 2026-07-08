@@ -177,7 +177,30 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
       onProgress(`Clip ${i + 1}/${prompts.length}: tope de clips de pago alcanzado (${MAX_PAID_CLIPS}) — imagen IA gratis para el resto.`);
     }
 
-    // Sin pago (o fal falló): imagen IA GRATIS (Pollinations) con Ken Burns.
+    // DECISIÓN DE CALIDAD (basada en investigación real de julio 2026, no
+    // suposición): el video de IA de calidad consistente (Seedance 2.0, Kling
+    // 3.0 Turbo, Wan) cuesta $0.09-0.15/segundo en TODOS los proveedores
+    // serios — no existe una vía gratis que iguale esa calidad. Pollinations
+    // (imagen IA gratis) es estructuralmente inferior: por eso la mayoría de
+    // clips (los que no caben en MAX_PAID_CLIPS) salían "una mierda" según el
+    // usuario, sin importar cuánto se afinara el prompt. La solución real sin
+    // gastar más: para el resto de clips (sin presupuesto de pago), preferir
+    // SIEMPRE video de stock REAL (Pexels, gratis, profesional, nunca
+    // deformado) sobre una imagen de IA gratis de baja calidad. Pollinations
+    // queda como respaldo secundario solo si Pexels no tiene ningún resultado
+    // para esa consulta — nunca como primera opción.
+    onProgress(`Clip ${i + 1}/${prompts.length}: buscando video de stock real primero ("${stockQuery}")...`);
+    try {
+      const videoUrl = await pexels.searchVideo(stockQuery);
+      urls.push({ type: "video", url: videoUrl });
+      onProgress(`Clip ${i + 1}/${prompts.length}: listo (stock real)`);
+      continue;
+    } catch (e) {
+      onProgress(`Clip ${i + 1}/${prompts.length}: sin stock para esa consulta (${e.message.slice(0, 60)}) — generando imagen IA gratis de respaldo...`);
+    }
+
+    // Ni stock ni pago disponibles: imagen IA GRATIS (Pollinations) con Ken Burns,
+    // como último respaldo antes del genérico abstracto.
     let buffer = null;
     let freeImageFailedQA = false;
     try {
