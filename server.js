@@ -1036,4 +1036,44 @@ app.get("/test-video-compare", async (req, res) => {
   res.json(results);
 });
 
+// ── GET /test-veo-submit, GET /test-veo-status ── versión ASÍNCRONA de la
+// prueba de Veo — necesaria porque el proxy de Railway corta conexiones HTTP
+// que tardan demasiado (probado en vivo: 502 "Application failed to respond"
+// con /test-video-compare mientras Veo seguía generando en Google, sin forma
+// de saber si eso se cobró o no). Aquí: /submit devuelve el nombre de la
+// operación al instante (no espera), /status se llama repetidas veces desde
+// el navegador/curl (llamadas cortas, nunca chocan el timeout del proxy). ──
+app.get("/test-veo-submit", async (req, res) => {
+  try {
+    if (!veoVideo.isConfigured()) {
+      return res.status(400).json({ ok: false, error: "GEMINI_API_KEY + USE_VEO=true no configurados — no se gastó nada." });
+    }
+    const frameUrl = req.query.frameUrl;
+    if (!frameUrl) {
+      return res.status(400).json({ ok: false, error: "Falta ?frameUrl=<url de una imagen ya generada> (reusa una de /test-video-compare para no pagar el frame de nuevo)." });
+    }
+    const prompt = req.query.prompt || "camera slowly pushes in, cinematic motion, subtle natural movement";
+    const opName = await veoVideo.submitOperation(frameUrl, prompt, 4);
+    res.json({ ok: true, opName, nota: "Operación enviada a Google (esto SÍ empieza a facturarse). Consultá GET /test-veo-status?op=" + encodeURIComponent(opName) + " cada 10-15s hasta que diga done:true." });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
+});
+
+app.get("/test-veo-status", async (req, res) => {
+  try {
+    const opName = req.query.op;
+    if (!opName) return res.status(400).json({ ok: false, error: "Falta ?op=<nombre de la operación devuelto por /test-veo-submit>" });
+    const result = await veoVideo.pollOperation(opName);
+    if (!result.done) {
+      return res.json({ ok: true, done: false, nota: "Todavía generando — volvé a consultar en 10-15s." });
+    }
+    const out = path.join("outputs", "compare-veo.mp4");
+    fs.writeFileSync(out, result.buffer);
+    res.json({ ok: true, done: true, video: "/download/compare-veo.mp4", costoReal: "~$0.20-0.24 (frame ya pagado + video Veo, cuenta de Google Cloud)" });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
+});
+
 app.listen(PORT, () => console.log(`Reel Generator → http://localhost:${PORT}`));

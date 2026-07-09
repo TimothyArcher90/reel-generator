@@ -47,10 +47,17 @@ async function fetchImageAsBase64(imageUrl) {
   return { mimeType, data: Buffer.from(res.data).toString("base64") };
 }
 
-// productImageUrl: URL pública de la imagen ya generada (misma que recibe
-// falVideo.animateProductUrl) — se reusa el frame FLUX-pro ya validado por QA,
-// Veo solo reemplaza el paso de animación, no el de generación de imagen.
-async function animateProductUrl(productImageUrl, motionPrompt, segDurSeconds = 4, aspectRatio = "9:16") {
+// Envía la generación y devuelve el nombre de la operación de inmediato (no
+// espera). Separado de animateProductUrl para poder exponer un endpoint de
+// diagnóstico ASÍNCRONO (submit + poll en llamadas HTTP cortas separadas) —
+// un endpoint sincrónico que espera los 30-90s+ que tarda Veo se topa con el
+// timeout del proxy de Railway (probado en vivo: 502 "Application failed to
+// respond" con la operación de Google posiblemente ya facturándose en
+// segundo plano sin que lleguemos a ver el resultado). El pipeline principal
+// (server.js) NO tiene este problema porque ya corre los jobs en segundo
+// plano con su propio jobId/GET /status — solo el endpoint de prueba directa
+// lo necesitaba.
+async function submitOperation(productImageUrl, motionPrompt, segDurSeconds = 4, aspectRatio = "9:16") {
   if (!API_KEY) throw new Error("NO_GEMINI_API_KEY: Veo no configurado (no se gasta)");
   const duration = nearestAllowedDuration(segDurSeconds);
   const image = await fetchImageAsBase64(productImageUrl);
@@ -65,37 +72,50 @@ async function animateProductUrl(productImageUrl, motionPrompt, segDurSeconds = 
   );
   const opName = submitRes.data?.name;
   if (!opName) throw new Error("Veo: respuesta sin operation name — " + JSON.stringify(submitRes.data).slice(0, 300));
+  return opName;
+}
 
-  // Poll hasta done=true, máx ~3 min (video de 4-8s suele tardar 30-90s).
+// Revisa una operación existente. Devuelve { done: false } mientras sigue en
+// curso, o { done: true, buffer } con el video ya descargado cuando termina.
+async function pollOperation(opName) {
+  const pollRes = await axios.get(`${BASE}/${opName}`, {
+    headers: { "x-goog-api-key": API_KEY },
+    timeout: 15000
+  });
+  if (!pollRes.data?.done) return { done: false };
+
+  if (pollRes.data.error) {
+    throw new Error("Veo generation error: " + JSON.stringify(pollRes.data.error).slice(0, 300));
+  }
+  const videoUri =
+    pollRes.data?.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri ||
+    pollRes.data?.response?.videos?.[0]?.uri;
+  if (!videoUri) throw new Error("Veo: sin video en la respuesta final — " + JSON.stringify(pollRes.data).slice(0, 300));
+
+  // La URI de Veo exige el header x-goog-api-key para descargar (no es una
+  // URL pública como fal.ai/Pexels) — se descarga aquí mismo a Buffer.
+  const videoRes = await axios.get(videoUri, {
+    headers: { "x-goog-api-key": API_KEY },
+    responseType: "arraybuffer",
+    timeout: 60000
+  });
+  return { done: true, buffer: Buffer.from(videoRes.data) };
+}
+
+// productImageUrl: URL pública de la imagen ya generada (misma que recibe
+// falVideo.animateProductUrl) — se reusa el frame FLUX-pro ya validado por QA,
+// Veo solo reemplaza el paso de animación, no el de generación de imagen.
+// Usado por el pipeline principal (server.js), que YA corre en segundo plano
+// (jobId/status) — ahí SÍ es seguro esperar sincrónicamente aquí adentro.
+async function animateProductUrl(productImageUrl, motionPrompt, segDurSeconds = 4, aspectRatio = "9:16") {
+  const opName = await submitOperation(productImageUrl, motionPrompt, segDurSeconds, aspectRatio);
   const deadline = Date.now() + 180000;
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 5000));
-    const pollRes = await axios.get(`${BASE}/${opName}`, {
-      headers: { "x-goog-api-key": API_KEY },
-      timeout: 15000
-    });
-    if (pollRes.data?.done) {
-      if (pollRes.data.error) {
-        throw new Error("Veo generation error: " + JSON.stringify(pollRes.data.error).slice(0, 300));
-      }
-      const videoUri =
-        pollRes.data?.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri ||
-        pollRes.data?.response?.videos?.[0]?.uri;
-      if (!videoUri) throw new Error("Veo: sin video en la respuesta final — " + JSON.stringify(pollRes.data).slice(0, 300));
-      // La URI de Veo exige el header x-goog-api-key para descargar (no es una
-      // URL pública como fal.ai/Pexels) — se descarga aquí mismo a Buffer, así
-      // el resto del pipeline (server.js/renderVideo.js) no necesita saber
-      // nada especial: un clip con `buffer` se escribe directo a disco igual
-      // que cualquier otro (ver server.js linea ~543, clip.buffer).
-      const videoRes = await axios.get(videoUri, {
-        headers: { "x-goog-api-key": API_KEY },
-        responseType: "arraybuffer",
-        timeout: 60000
-      });
-      return Buffer.from(videoRes.data);
-    }
+    const result = await pollOperation(opName);
+    if (result.done) return result.buffer;
   }
   throw new Error("Veo: timeout esperando la operación (>3min)");
 }
 
-module.exports = { animateProductUrl, isConfigured, nearestAllowedDuration };
+module.exports = { animateProductUrl, submitOperation, pollOperation, isConfigured, nearestAllowedDuration };
