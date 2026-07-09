@@ -23,6 +23,7 @@ const pexels = require("./pipeline/pexels");
 const pollinationsImage = require("./pipeline/pollinationsImage");
 const falVideo = require("./pipeline/falVideo");
 const veoVideo = require("./pipeline/veoVideo");
+const chatterboxVoice = require("./pipeline/chatterboxVoice");
 const subtitles = require("./pipeline/subtitles");
 const { qaScript } = require("./pipeline/qaScript");
 const { qaImage } = require("./pipeline/qaImage");
@@ -143,54 +144,31 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
       onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota (${e.message.slice(0, 80)}) — generando imagen IA de respaldo...`);
     }
 
-    // LTX gratis se agotó. VÍA DE PAGO PRIORITARIA: Google Veo 3.1 (mejor
-    // calidad/movimiento real que Wan, audio nativo incluido, mismo costo o
-    // menor: $0.20/clip de 4s en Lite 720p vs ~$0.24-0.28/clip de fal.ai Wan+
-    // FLUX). Solo se activa con GEMINI_API_KEY + USE_VEO=true en Railway — si
-    // no está configurado, cae exactamente al camino de fal.ai de siempre, sin
-    // cambiar nada del comportamiento actual.
-    if (veoVideo.isConfigured() && paidCount < MAX_PAID_CLIPS) {
-      try {
-        onProgress(`Clip ${i + 1}/${prompts.length}: generando frame con IA de pago (fal FLUX, ~$0.003)...`);
-        const imgUrl = await withTimeout(falVideo.generateImageUrl(videoPrompt), 60000, "fal flux timeout");
-        const captionForQA = (typeof prompts[i] === "object" && prompts[i].caption) || videoPrompt;
-        const { data: imgBuf } = await axios.get(imgUrl, { responseType: "arraybuffer", timeout: 20000 });
-        let qaOk = true;
-        try {
-          const qa = await withTimeout(qaImage(Buffer.from(imgBuf), captionForQA), 20000, "QA imagen timeout");
-          qaOk = qa.pass;
-          if (!qaOk) onProgress(`Clip ${i + 1}/${prompts.length}: frame de pago rechazado por control de calidad (${qa.reason}) — regenerando frame...`);
-        } catch (e) { /* QA no disponible — seguir, no vale la pena bloquear un clip de pago por esto */ }
-
-        let finalImgUrl = imgUrl;
-        if (!qaOk) {
-          finalImgUrl = await withTimeout(falVideo.generateImageUrl(videoPrompt), 60000, "fal flux timeout");
-        }
-
-        onProgress(`Clip ${i + 1}/${prompts.length}: animando con Google Veo 3.1 (${paidCount + 1}/${MAX_PAID_CLIPS})...`);
-        const veoDuration = veoVideo.nearestAllowedDuration(Math.min(4, segDurSeconds));
-        const videoBuffer = await withTimeout(veoVideo.animateProductUrl(finalImgUrl, videoPrompt, veoDuration), 180000, "Veo timeout");
-        paidCount++;
-        urls.push({ type: "video", buffer: videoBuffer });
-        onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real - Veo 3.1)`);
-        continue;
-      } catch (e) {
-        onProgress(`Clip ${i + 1}/${prompts.length}: Veo no disponible (${e.message.slice(0, 60)}) — probando fal.ai...`);
-      }
-    }
-
-    // VÍA DE PAGO DE RESPALDO (fal.ai) para VIDEO REAL animado — se usa si Veo
-    // no está configurado o falló. Genera el frame con fal FLUX (~$0.003,
-    // CONFIABLE, sin el 429 de Pollinations) y lo anima con Wan 480p (~$0.20).
-    if (falVideo.isConfigured() && paidCount < MAX_PAID_CLIPS) {
+    // LTX gratis se agotó. VÍAS DE PAGO, en orden de costo/calidad real
+    // (verificado en vivo julio 2026, no supuesto):
+    //   1. Seedance 1.5 Pro vía fal.ai (default) — MISMA FAL_KEY que ya usas
+    //      para Wan/FLUX, cero cuenta nueva. ~$0.10-0.15/clip de 4s sin audio
+    //      (el audio nativo se descarta a propósito: renderVideo.js ya mezcla
+    //      la narración de Guillermo como única pista). Es el motor que el
+    //      proyecto quería usar desde el principio.
+    //   2. Google Veo 3.1 — solo si USE_VEO=true (GEMINI_API_KEY aparte). Algo
+    //      más caro (~$0.20/clip) y paga por audio nativo que se descarta
+    //      igual; se deja como comparación A/B de calidad visual, no como
+    //      opción de costo.
+    //   3. Wan 480p (el motor de siempre) — respaldo final si los dos de
+    //      arriba no están configurados o fallan.
+    // Todas comparten el mismo tope MAX_PAID_CLIPS y el mismo frame FLUX-pro
+    // con control de calidad antes de animar (perder $0.003 en un frame malo
+    // es aceptable; perder $0.10-0.20 animándolo no).
+    const FAL_VIDEO_ENGINE = process.env.FAL_VIDEO_ENGINE || "seedance"; // "seedance" | "wan"
+    if ((falVideo.isConfigured() || veoVideo.isConfigured()) && paidCount < MAX_PAID_CLIPS) {
       try {
         onProgress(`Clip ${i + 1}/${prompts.length}: generando frame con IA de pago (fal FLUX, ~$0.003)...`);
         const imgUrl = await withTimeout(falVideo.generateImageUrl(videoPrompt), 60000, "fal flux timeout");
         // CONTROL DE CALIDAD ANTES DE GASTAR EN ANIMAR (pedido explícito del
         // usuario tras perder crédito en imágenes malas sin filtro): el frame
-        // de FLUX cuesta centavos; animarlo con Wan cuesta $0.20. Se verifica
-        // AQUÍ, antes del paso caro, para no pagar por animar algo genérico o
-        // que no ilustra el guion. Un solo reintento (otros ~$0.003) si falla.
+        // de FLUX cuesta centavos; animarlo cuesta $0.10-0.20+. Se verifica
+        // AQUÍ, antes del paso caro. Un solo reintento (otros ~$0.003) si falla.
         const captionForQA = (typeof prompts[i] === "object" && prompts[i].caption) || videoPrompt;
         const { data: imgBuf } = await axios.get(imgUrl, { responseType: "arraybuffer", timeout: 20000 });
         let qaOk = true;
@@ -205,16 +183,52 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
           finalImgUrl = await withTimeout(falVideo.generateImageUrl(videoPrompt), 60000, "fal flux timeout");
         }
 
-        onProgress(`Clip ${i + 1}/${prompts.length}: animando con IA de pago (fal.ai Wan, ${paidCount + 1}/${MAX_PAID_CLIPS})...`);
-        const videoUrl = await withTimeout(falVideo.animateProductUrl(finalImgUrl, videoPrompt), 120000, "fal.ai timeout");
-        paidCount++;
-        urls.push({ type: "video", url: videoUrl });
-        onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real - fal.ai)`);
-        continue;
+        // Cadena de intentos de animación, en orden de prioridad — si uno
+        // falla se prueba el siguiente ANTES de rendirse al respaldo gratis
+        // (misma resiliencia que existía cuando solo había un motor de pago).
+        const animationAttempts = [];
+        if (falVideo.isConfigured() && FAL_VIDEO_ENGINE === "seedance") {
+          animationAttempts.push({
+            name: "Seedance 1.5 Pro",
+            run: () => withTimeout(falVideo.animateProductUrlSeedance(finalImgUrl, videoPrompt, Math.min(4, segDurSeconds)), 120000, "Seedance timeout"),
+            push: (videoUrl) => urls.push({ type: "video", url: videoUrl })
+          });
+        }
+        if (veoVideo.isConfigured()) {
+          animationAttempts.push({
+            name: "Google Veo 3.1",
+            run: () => withTimeout(veoVideo.animateProductUrl(finalImgUrl, videoPrompt, veoVideo.nearestAllowedDuration(Math.min(4, segDurSeconds))), 180000, "Veo timeout"),
+            push: (videoBuffer) => urls.push({ type: "video", buffer: videoBuffer })
+          });
+        }
+        if (falVideo.isConfigured()) {
+          animationAttempts.push({
+            name: "fal.ai Wan",
+            run: () => withTimeout(falVideo.animateProductUrl(finalImgUrl, videoPrompt), 120000, "fal.ai timeout"),
+            push: (videoUrl) => urls.push({ type: "video", url: videoUrl })
+          });
+        }
+
+        let animated = false;
+        for (const attempt of animationAttempts) {
+          try {
+            onProgress(`Clip ${i + 1}/${prompts.length}: animando con ${attempt.name} (${paidCount + 1}/${MAX_PAID_CLIPS})...`);
+            const result = await attempt.run();
+            attempt.push(result);
+            paidCount++;
+            animated = true;
+            onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real - ${attempt.name})`);
+            break;
+          } catch (e) {
+            onProgress(`Clip ${i + 1}/${prompts.length}: ${attempt.name} falló (${e.message.slice(0, 60)}) — probando siguiente motor...`);
+          }
+        }
+        if (animated) continue;
+        throw new Error("Todos los motores de pago fallaron para este clip");
       } catch (e) {
-        onProgress(`Clip ${i + 1}/${prompts.length}: fal.ai no disponible (${e.message.slice(0, 60)}) — imagen IA fija de respaldo.`);
+        onProgress(`Clip ${i + 1}/${prompts.length}: motor de pago no disponible (${e.message.slice(0, 60)}) — imagen IA fija de respaldo.`);
       }
-    } else if (falVideo.isConfigured() && paidCount >= MAX_PAID_CLIPS) {
+    } else if ((falVideo.isConfigured() || veoVideo.isConfigured()) && paidCount >= MAX_PAID_CLIPS) {
       onProgress(`Clip ${i + 1}/${prompts.length}: tope de clips de pago alcanzado (${MAX_PAID_CLIPS}) — imagen IA gratis para el resto.`);
     }
 
@@ -335,6 +349,16 @@ const useHiggsfieldVoice = false;
 // pipeline/elevenlabs.js lanza un error claro (ver línea ~611) y cae a XTTS/
 // Edge-TTS igual que antes — nunca cuelga el reel.
 const useElevenLabs = !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID);
+// Chatterbox Multilingual (Resemble AI, open-source) vía fal.ai — MISMA
+// FAL_KEY que ya usas para video, pago por caracter (~$0.016/reel, no
+// suscripción), usa pipeline/assets/guillermo_ref.wav ya commiteado en el
+// repo como referencia de clonación. Alternativa de bajo riesgo a ElevenLabs
+// (ver pipeline/chatterboxVoice.js) — activar con VOICE_ENGINE=chatterbox en
+// Railway. Por defecto se mantiene ElevenLabs si ya está configurado (no
+// queremos cambiar sin que lo pidas), pero si el saldo de ElevenLabs vuelve a
+// fallar, Chatterbox es la opción recomendada para probar primero: cuesta
+// centavos, no meses de suscripción.
+const useChatterbox = chatterboxVoice.isConfigured() && process.env.VOICE_ENGINE === "chatterbox";
 // Clonación de voz REAL de Guillermo, gratis, vía el Space público de Hugging
 // Face "hasanbasbunar/Voice-Cloning-XTTS-v2" (modelo XTTS-v2 — ver
 // pipeline/voiceCloneXTTS.js, contrato de API verificado en vivo, no
@@ -347,7 +371,7 @@ const useElevenLabs = !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLAB
 // por eso siempre va con timeout acotado y cae a Edge-TTS si no responde a
 // tiempo — el pipeline NUNCA debe poder colgarse por esto.
 const useVoiceClone = true;
-const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useElevenLabs ? "ElevenLabs (Guillermo)" : useVoiceClone ? "XTTS-v2 (clon de Guillermo, gratis)" : "Edge-TTS (gratis, genérica)";
+const voiceEngineName = useHiggsfieldVoice ? "Higgsfield (Guillermo)" : useChatterbox ? "Chatterbox (Guillermo, fal.ai)" : useElevenLabs ? "ElevenLabs (Guillermo)" : useVoiceClone ? "XTTS-v2 (clon de Guillermo, gratis)" : "Edge-TTS (gratis, genérica)";
 
 async function generateVoiceoverHiggsfieldToFile(text, outputPath) {
   const url = await generateVoiceoverHiggsfield(text, GUILLERMO_VOICE_ID);
@@ -387,9 +411,24 @@ async function generateVoiceoverElevenLabsWithFallback(text, outputPath, onProgr
   }
 }
 
+// Chatterbox con la misma garantía de "nunca tumbar el job" — si fal.ai falla
+// por lo que sea, cae a XTTS/Edge-TTS igual que ElevenLabs.
+async function generateVoiceoverChatterboxWithFallback(text, outputPath, onProgress = () => {}) {
+  try {
+    onProgress("Generando voz real de Guillermo (Chatterbox)...");
+    await chatterboxVoice.generateVoiceover(text, outputPath);
+    onProgress("Voz de Guillermo (Chatterbox) lista.");
+  } catch (e) {
+    onProgress(`Chatterbox falló (${e.message.slice(0, 120)}) — usando XTTS/Edge-TTS de respaldo...`);
+    await generateVoiceoverCloneWithFallback(text, outputPath, onProgress);
+  }
+}
+
 const { generateVoiceover } = useHiggsfieldVoice
   ? { generateVoiceover: generateVoiceoverHiggsfieldToFile }
-  : (useElevenLabs ? { generateVoiceover: generateVoiceoverElevenLabsWithFallback } : (useVoiceClone ? { generateVoiceover: generateVoiceoverCloneWithFallback } : edgeTts));
+  : (useChatterbox
+      ? { generateVoiceover: generateVoiceoverChatterboxWithFallback }
+      : (useElevenLabs ? { generateVoiceover: generateVoiceoverElevenLabsWithFallback } : (useVoiceClone ? { generateVoiceover: generateVoiceoverCloneWithFallback } : edgeTts)));
 const { renderVideo }       = require("./pipeline/renderVideo");
 
 const app  = express();

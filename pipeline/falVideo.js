@@ -96,8 +96,40 @@ async function generateImageUrl(prompt) {
   return url;
 }
 
+// Seedance 1.5 Pro (ByteDance) vía fal.ai — MISMA cuenta/FAL_KEY que Wan y
+// FLUX, cero cuenta/API key nueva que crear. Reemplaza a Wan como motor de
+// animación por defecto: más barato (~$0.026/seg sin audio vs Wan $0.20 fijo
+// por clip de 480p) Y modelo más nuevo/mejor (Seedance es el que el proyecto
+// original quería usar desde el commit inicial — ver README histórico).
+// Contrato verificado en fal.ai/models/fal-ai/bytedance/seedance/v1.5/pro/
+// image-to-video (no adivinado): input {image_url, prompt, duration,
+// resolution, aspect_ratio, generate_audio}, output {video:{url}}.
+// generate_audio=false a propósito: el render final (renderVideo.js) ya
+// mezcla la narración de Guillermo como única pista de audio — pagar por
+// audio ambiental que se descarta sería tirar plata.
+const SEEDANCE_COST_PARAMS = { resolution: "720p", aspect_ratio: "9:16", generate_audio: false };
+
+async function callSeedance(imageUrl, motionPrompt, durationSeconds = 4) {
+  const duration = Math.max(4, Math.min(12, Math.round(durationSeconds)));
+  const result = await fal.subscribe("fal-ai/bytedance/seedance/v1.5/pro/image-to-video", {
+    input: { prompt: motionPrompt, image_url: imageUrl, duration, ...SEEDANCE_COST_PARAMS },
+    logs: false
+  });
+  const url = result?.data?.video?.url || result?.video?.url;
+  if (!url) throw new Error("fal seedance: respuesta sin video — " + JSON.stringify(result).slice(0, 300));
+  return url;
+}
+
+// Misma firma que animateProductUrl (imagen ya generada/QA-validada -> URL de
+// video animado) para poder intercambiarlas en server.js sin tocar el resto
+// del pipeline.
+async function animateProductUrlSeedance(productImageUrl, motionPrompt, durationSeconds = 4) {
+  ensureConfigured();
+  return callSeedance(productImageUrl, motionPrompt, durationSeconds);
+}
+
 function isConfigured() {
   return !!process.env.FAL_KEY;
 }
 
-module.exports = { animateImage, animateProductUrl, generateImageUrl, isConfigured };
+module.exports = { animateImage, animateProductUrl, animateProductUrlSeedance, generateImageUrl, isConfigured };
