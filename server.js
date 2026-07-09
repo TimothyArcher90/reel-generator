@@ -987,27 +987,37 @@ app.get("/test-clip-ltx", async (req, res) => {
 app.get("/test-video-compare", async (req, res) => {
   const prompt = req.query.prompt ||
     "Extreme close-up of a golden DNA double helix rotating slowly, glowing particles, camera pushes in, cinematic lighting, dark editorial aesthetic with warm gold accent, 9:16 vertical, photorealistic, in motion";
+  // ?frameUrl=... reusa un frame ya generado (de una corrida anterior) para no
+  // volver a pagar FLUX ni Seedance al reintentar solo Veo. ?engine=veo salta
+  // Seedance por completo — útil justo para eso: aislar una prueba de Veo.
+  const skipSeedance = req.query.engine === "veo";
   const results = { ok: true, prompt, engines: {} };
 
   if (!falVideo.isConfigured()) {
     return res.status(400).json({ ok: false, error: "FAL_KEY no configurada — sin ella no se puede generar el frame ni Seedance. No se gastó nada." });
   }
 
-  let frameUrl;
-  try {
-    frameUrl = await withTimeout(falVideo.generateImageUrl(prompt), 60000, "fal flux timeout");
-    results.frame = frameUrl;
-  } catch (e) {
-    return res.status(503).json({ ok: false, paso: "frame (fal FLUX)", error: friendlyError(e) });
+  let frameUrl = req.query.frameUrl;
+  if (!frameUrl) {
+    try {
+      frameUrl = await withTimeout(falVideo.generateImageUrl(prompt), 60000, "fal flux timeout");
+    } catch (e) {
+      return res.status(503).json({ ok: false, paso: "frame (fal FLUX)", error: friendlyError(e) });
+    }
   }
+  results.frame = frameUrl;
 
-  try {
-    const videoUrl = await withTimeout(falVideo.animateProductUrlSeedance(frameUrl, prompt, 4), 120000, "Seedance timeout");
-    const out = path.join("outputs", "compare-seedance.mp4");
-    await downloadFile(videoUrl, out);
-    results.engines.seedance = { ok: true, costoReal: "~$0.10-0.15 (frame+video)", video: "/download/compare-seedance.mp4" };
-  } catch (e) {
-    results.engines.seedance = { ok: false, error: friendlyError(e) };
+  if (skipSeedance) {
+    results.engines.seedance = { ok: false, error: "omitido a propósito (?engine=veo) — no se gastó nada aquí." };
+  } else {
+    try {
+      const videoUrl = await withTimeout(falVideo.animateProductUrlSeedance(frameUrl, prompt, 4), 120000, "Seedance timeout");
+      const out = path.join("outputs", "compare-seedance.mp4");
+      await downloadFile(videoUrl, out);
+      results.engines.seedance = { ok: true, costoReal: "~$0.10-0.15 (frame+video)", video: "/download/compare-seedance.mp4" };
+    } catch (e) {
+      results.engines.seedance = { ok: false, error: friendlyError(e) };
+    }
   }
 
   if (veoVideo.isConfigured()) {
