@@ -22,6 +22,7 @@ const ltxSpace = require("./pipeline/ltxSpace");
 const pexels = require("./pipeline/pexels");
 const pollinationsImage = require("./pipeline/pollinationsImage");
 const falVideo = require("./pipeline/falVideo");
+const veoVideo = require("./pipeline/veoVideo");
 const subtitles = require("./pipeline/subtitles");
 const { qaScript } = require("./pipeline/qaScript");
 const { qaImage } = require("./pipeline/qaImage");
@@ -142,10 +143,45 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
       onProgress(`Clip ${i + 1}/${prompts.length}: LTX-Video sin cuota (${e.message.slice(0, 80)}) — generando imagen IA de respaldo...`);
     }
 
-    // LTX gratis se agotó. VÍA DE PAGO (fal.ai) para VIDEO REAL animado — solo
-    // si hay FAL_KEY y no se pasó el tope de clips de pago. Genera el frame con
-    // fal FLUX (~$0.003, CONFIABLE, sin el 429 de Pollinations) y lo anima con
-    // Wan 480p (~$0.20). Es lo que convierte la imagen fija en movimiento real.
+    // LTX gratis se agotó. VÍA DE PAGO PRIORITARIA: Google Veo 3.1 (mejor
+    // calidad/movimiento real que Wan, audio nativo incluido, mismo costo o
+    // menor: $0.20/clip de 4s en Lite 720p vs ~$0.24-0.28/clip de fal.ai Wan+
+    // FLUX). Solo se activa con GEMINI_API_KEY + USE_VEO=true en Railway — si
+    // no está configurado, cae exactamente al camino de fal.ai de siempre, sin
+    // cambiar nada del comportamiento actual.
+    if (veoVideo.isConfigured() && paidCount < MAX_PAID_CLIPS) {
+      try {
+        onProgress(`Clip ${i + 1}/${prompts.length}: generando frame con IA de pago (fal FLUX, ~$0.003)...`);
+        const imgUrl = await withTimeout(falVideo.generateImageUrl(videoPrompt), 60000, "fal flux timeout");
+        const captionForQA = (typeof prompts[i] === "object" && prompts[i].caption) || videoPrompt;
+        const { data: imgBuf } = await axios.get(imgUrl, { responseType: "arraybuffer", timeout: 20000 });
+        let qaOk = true;
+        try {
+          const qa = await withTimeout(qaImage(Buffer.from(imgBuf), captionForQA), 20000, "QA imagen timeout");
+          qaOk = qa.pass;
+          if (!qaOk) onProgress(`Clip ${i + 1}/${prompts.length}: frame de pago rechazado por control de calidad (${qa.reason}) — regenerando frame...`);
+        } catch (e) { /* QA no disponible — seguir, no vale la pena bloquear un clip de pago por esto */ }
+
+        let finalImgUrl = imgUrl;
+        if (!qaOk) {
+          finalImgUrl = await withTimeout(falVideo.generateImageUrl(videoPrompt), 60000, "fal flux timeout");
+        }
+
+        onProgress(`Clip ${i + 1}/${prompts.length}: animando con Google Veo 3.1 (${paidCount + 1}/${MAX_PAID_CLIPS})...`);
+        const veoDuration = veoVideo.nearestAllowedDuration(Math.min(4, segDurSeconds));
+        const videoBuffer = await withTimeout(veoVideo.animateProductUrl(finalImgUrl, videoPrompt, veoDuration), 180000, "Veo timeout");
+        paidCount++;
+        urls.push({ type: "video", buffer: videoBuffer });
+        onProgress(`Clip ${i + 1}/${prompts.length}: listo (video IA real - Veo 3.1)`);
+        continue;
+      } catch (e) {
+        onProgress(`Clip ${i + 1}/${prompts.length}: Veo no disponible (${e.message.slice(0, 60)}) — probando fal.ai...`);
+      }
+    }
+
+    // VÍA DE PAGO DE RESPALDO (fal.ai) para VIDEO REAL animado — se usa si Veo
+    // no está configurado o falló. Genera el frame con fal FLUX (~$0.003,
+    // CONFIABLE, sin el 429 de Pollinations) y lo anima con Wan 480p (~$0.20).
     if (falVideo.isConfigured() && paidCount < MAX_PAID_CLIPS) {
       try {
         onProgress(`Clip ${i + 1}/${prompts.length}: generando frame con IA de pago (fal FLUX, ~$0.003)...`);
@@ -288,10 +324,17 @@ async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
 // contra text2speech_v2 dan 404). Queda solo como endpoint de diagnóstico manual
 // (GET /test-voice-higgsfield) hasta que Higgsfield lo habilite — NO se usa en el pipeline.
 const useHiggsfieldVoice = false;
-// ElevenLabs deshabilitado a propósito (2026-07-06): saldo de ElevenAPI insuficiente,
-// sigue fallando con 401/quota_exceeded. Forzado a Edge-TTS gratis hasta resolver eso
-// aparte — no depende de borrar las variables en Railway.
-const useElevenLabs = false;
+// ElevenLabs: auto-detectado por presencia de credenciales en vez de un
+// booleano fijo. Antes esto quedaba hardcodeado en `false` (deshabilitado a
+// mano el 2026-07-06 por saldo insuficiente) — el problema real es que aunque
+// se arreglara el saldo y se pusieran las variables en Railway, el código
+// SEGUÍA sin usarlas hasta hacer OTRO deploy cambiando este `false` a mano.
+// Ahora: apenas ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID estén configuradas en
+// Railway con saldo real, el pipeline usa la voz real de Guillermo en el
+// siguiente request, sin tocar código de nuevo. Si el saldo sigue agotado,
+// pipeline/elevenlabs.js lanza un error claro (ver línea ~611) y cae a XTTS/
+// Edge-TTS igual que antes — nunca cuelga el reel.
+const useElevenLabs = !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID);
 // Clonación de voz REAL de Guillermo, gratis, vía el Space público de Hugging
 // Face "hasanbasbunar/Voice-Cloning-XTTS-v2" (modelo XTTS-v2 — ver
 // pipeline/voiceCloneXTTS.js, contrato de API verificado en vivo, no
@@ -327,9 +370,26 @@ async function generateVoiceoverCloneWithFallback(text, outputPath, onProgress =
   }
 }
 
+// ElevenLabs (voz de pago, la de mejor calidad) con la MISMA garantía de "nunca
+// tumbar el job" que ya tenían XTTS/Edge-TTS: si las credenciales están mal, el
+// saldo se agotó, o hay un 401/quota_exceeded (el incidente real del
+// 2026-07-06), cae a XTTS gratis (que a su vez cae a Edge-TTS) en vez de fallar
+// el reel completo. Antes NO existía este wrapper — por eso había que apagar
+// ElevenLabs a mano en vez de dejar que fallara solo con gracia.
+async function generateVoiceoverElevenLabsWithFallback(text, outputPath, onProgress = () => {}) {
+  try {
+    onProgress("Generando voz real de Guillermo (ElevenLabs)...");
+    await elevenLabs.generateVoiceover(text, outputPath);
+    onProgress("Voz de Guillermo (ElevenLabs) lista.");
+  } catch (e) {
+    onProgress(`ElevenLabs falló (${e.message.slice(0, 120)}) — usando XTTS/Edge-TTS de respaldo...`);
+    await generateVoiceoverCloneWithFallback(text, outputPath, onProgress);
+  }
+}
+
 const { generateVoiceover } = useHiggsfieldVoice
   ? { generateVoiceover: generateVoiceoverHiggsfieldToFile }
-  : (useElevenLabs ? elevenLabs : (useVoiceClone ? { generateVoiceover: generateVoiceoverCloneWithFallback } : edgeTts));
+  : (useElevenLabs ? { generateVoiceover: generateVoiceoverElevenLabsWithFallback } : (useVoiceClone ? { generateVoiceover: generateVoiceoverCloneWithFallback } : edgeTts));
 const { renderVideo }       = require("./pipeline/renderVideo");
 
 const app  = express();
