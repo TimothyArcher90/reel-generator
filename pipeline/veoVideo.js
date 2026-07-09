@@ -3,9 +3,13 @@
 // configurada en el entorno (Railway) Y USE_VEO=true — nunca gasta sin que el
 // usuario lo haya pedido a propósito, misma regla que fal.ai.
 //
-// Contrato de API verificado en ai.google.dev/gemini-api/docs/veo (no adivinado):
+// Contrato de API — CORREGIDO 2026-07-09 tras un error 400 real en producción
+// ("`inlineData` isn't supported by this model"): el campo correcto es
+// `bytesBase64Encoded` + `mimeType` directo en `image`, NO `inlineData`
+// (verificado contra un caso idéntico en el foro oficial de Google AI, no
+// adivinado esta vez):
 //   POST https://generativelanguage.googleapis.com/v1beta/models/{model}:predictLongRunning
-//   body: { instances: [{ prompt, image: { inlineData: { mimeType, data } } }],
+//   body: { instances: [{ prompt, image: { bytesBase64Encoded, mimeType } }],
 //           parameters: { aspectRatio, resolution, durationSeconds } }
 //   -> devuelve { name: "operations/xxx" } (long-running operation)
 //   poll: GET https://generativelanguage.googleapis.com/v1beta/{name}
@@ -54,7 +58,7 @@ async function animateProductUrl(productImageUrl, motionPrompt, segDurSeconds = 
   const submitRes = await axios.post(
     `${BASE}/models/${MODEL}:predictLongRunning`,
     {
-      instances: [{ prompt: motionPrompt, image: { inlineData: image } }],
+      instances: [{ prompt: motionPrompt, image: { bytesBase64Encoded: image.data, mimeType: image.mimeType } }],
       parameters: { aspectRatio, resolution: "720p", durationSeconds: String(duration) }
     },
     { headers: { "x-goog-api-key": API_KEY, "Content-Type": "application/json" }, timeout: 30000 }
