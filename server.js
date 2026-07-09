@@ -721,7 +721,11 @@ function friendlyError(err) {
     return `CLAVE API INVÁLIDA en ${url || "proveedor desconocido"} — revisar las variables de API en Railway. Detalle: ${body.slice(0, 200)}`;
   }
   if (status === 429) {
-    return "LÍMITE DE VELOCIDAD del proveedor — esperar 2-3 minutos y volver a intentar.";
+    // Antes esto ocultaba el detalle real del proveedor — un 429 puede ser un
+    // límite temporal (reintentar en minutos) O una cuota de plan/modelo
+    // agotada/no habilitada (reintentar no sirve de nada sin cambiar el
+    // plan). Mostrar el body real para poder distinguir los dos casos.
+    return `LÍMITE DE VELOCIDAD (HTTP 429) en ${url || "proveedor desconocido"} — Detalle: ${body.slice(0, 300)}`;
   }
   if (raw.includes("timeout") || raw.includes("Timeout")) {
     return "TIEMPO AGOTADO en un paso (" + raw + ") — volver a intentar; si se repite, avisar al administrador.";
