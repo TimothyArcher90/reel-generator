@@ -3,14 +3,16 @@
 // configurada en el entorno (Railway) Y USE_VEO=true — nunca gasta sin que el
 // usuario lo haya pedido a propósito, misma regla que fal.ai.
 //
-// Contrato de API — CORREGIDO 2026-07-09 tras un error 400 real en producción
-// ("`inlineData` isn't supported by this model"): el campo correcto es
-// `bytesBase64Encoded` + `mimeType` directo en `image`, NO `inlineData`
-// (verificado contra un caso idéntico en el foro oficial de Google AI, no
-// adivinado esta vez):
+// Contrato de API — CORREGIDO dos veces en pruebas reales contra la API en
+// vivo (2026-07-09), ninguna de las dos era adivinada pero la doc/resúmenes
+// no coincidían con lo que la API realmente exige:
+//   1) el campo de imagen es `bytesBase64Encoded` + `mimeType` directo en
+//      `image`, NO `inlineData` (error 400 real: "inlineData isn't supported").
+//   2) `durationSeconds` debe ser NÚMERO (4), no string ("4") — error 400 real:
+//      "The value type for durationSeconds needs to be a number."
 //   POST https://generativelanguage.googleapis.com/v1beta/models/{model}:predictLongRunning
 //   body: { instances: [{ prompt, image: { bytesBase64Encoded, mimeType } }],
-//           parameters: { aspectRatio, resolution, durationSeconds } }
+//           parameters: { aspectRatio, resolution, durationSeconds: <number> } }
 //   -> devuelve { name: "operations/xxx" } (long-running operation)
 //   poll: GET https://generativelanguage.googleapis.com/v1beta/{name}
 //   -> cuando done=true, el video queda en la respuesta con una uri descargable
@@ -66,7 +68,7 @@ async function submitOperation(productImageUrl, motionPrompt, segDurSeconds = 4,
     `${BASE}/models/${MODEL}:predictLongRunning`,
     {
       instances: [{ prompt: motionPrompt, image: { bytesBase64Encoded: image.data, mimeType: image.mimeType } }],
-      parameters: { aspectRatio, resolution: "720p", durationSeconds: String(duration) }
+      parameters: { aspectRatio, resolution: "720p", durationSeconds: duration }
     },
     { headers: { "x-goog-api-key": API_KEY, "Content-Type": "application/json" }, timeout: 30000 }
   );
