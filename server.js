@@ -94,18 +94,18 @@ async function stockOrGenericFallback(stockQuery, urls, i, total, onProgress) {
 async function generateAllClipsLTX(prompts, segDurSeconds, onProgress) {
   const urls = [];
   const clipDuration = Math.min(2, segDurSeconds); // límite real probado del Space (ver ltxSpace.js)
-  // TOPE DE CLIPS DE PAGO por reel (control de costo directo del usuario —
-  // bajado de 15 a 7 tras pedirlo explícitamente: "$4.20 está muy alto, que
-  // sea al menos $2"). fal.ai cuesta por clip: frame FLUX-pro (~$0.04-0.08) +
-  // Wan 480p animado ($0.20) = ~$0.24-0.28/clip — ya es el mínimo real que
-  // ofrece el proveedor (480p + num_frames mínimo), así que el único lugar
-  // para bajar el costo es CUÁNTOS clips pagan, no cuánto cuesta cada uno.
-  // Con 7, el tope queda en 7×~0.28 ≈ $1.96/reel. Se pagan los PRIMEROS 7
-  // clips (hook + escenas iniciales = lo que más retiene); el resto usa
-  // video de stock REAL de Pexels (ya no Pollinations de baja calidad, ver
-  // commit 9241cc3) — sigue siendo profesional, solo que no es 100% a medida.
-  // Ajustable con la variable de entorno FAL_MAX_PAID_CLIPS en Railway.
-  const MAX_PAID_CLIPS = parseInt(process.env.FAL_MAX_PAID_CLIPS || "7", 10);
+  // TOPE DE CLIPS DE PAGO por reel (control de costo). Default bajado a 5
+  // (2026-07-09, sin pedirle al usuario que toque Railway) porque el balance
+  // real de fal.ai en ese momento era ~$1 tras las pruebas de esta sesión —
+  // con Seedance (~$0.10-0.15/clip incl. frame) 5 clips ≈ $0.50-0.75/reel,
+  // deja margen real sin arriesgar quedar en $0 a mitad de una corrida. Los
+  // clips que no entran en el tope usan video de stock REAL de Pexels (no
+  // Pollinations genérico, ver commit 9241cc3) — NO son clips repetidos ni
+  // rotos: renderVideo.js garantiza cero repeticiones sin importar cuántos
+  // clips sean pagados (ver "CERO repeticiones, siempre" ahí, sin tocar).
+  // Ajustable con la variable de entorno FAL_MAX_PAID_CLIPS en Railway
+  // (subir a 7+ una vez que el balance de fal.ai lo permita).
+  const MAX_PAID_CLIPS = parseInt(process.env.FAL_MAX_PAID_CLIPS || "5", 10);
   let paidCount = 0;
   for (let i = 0; i < prompts.length; i++) {
     const p = prompts[i];
