@@ -908,6 +908,21 @@ app.get("/test-voice-higgsfield", async (req, res) => {
   }
 });
 
+// ── GET /test-voice-chatterbox ── prueba aislada de Chatterbox (voz de
+// Guillermo vía fal.ai), sin depender de VOICE_ENGINE — costo real ~$0.005 ──
+app.get("/test-voice-chatterbox", async (req, res) => {
+  try {
+    if (!chatterboxVoice.isConfigured()) {
+      return res.status(400).json({ ok: false, error: "FAL_KEY no configurada en Railway — sin ella no se gasta nada." });
+    }
+    const out = path.join("outputs", "test-voice-chatterbox.mp3");
+    await chatterboxVoice.generateVoiceover("Hola, esta es una prueba de la voz de Guillermo vía Chatterbox.", out);
+    res.json({ ok: true, audio: "/download/test-voice-chatterbox.mp3", nota: "Costó ~$0.005. Si suena a Guillermo, poné VOICE_ENGINE=chatterbox para usarla en el pipeline." });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: friendlyError(e) });
+  }
+});
+
 // ── GET /test-pexels ── prueba gratis e ilimitada del respaldo de video de stock ──
 app.get("/test-pexels", async (req, res) => {
   try {
@@ -960,6 +975,55 @@ app.get("/test-clip-ltx", async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: friendlyError(e) });
   }
+});
+
+// ── GET /test-video-compare ── UN mismo frame animado con Seedance y, si Veo
+// está configurado, también con Veo — para comparar calidad real lado a lado
+// en vez de confiar en promesas de proveedor. Costo real (no estimado):
+// 1 frame FLUX (~$0.04-0.08, fal.ai) + Seedance 4s (~$0.10, fal.ai) + Veo
+// Lite 4s (~$0.20, Google Cloud — SOLO si GEMINI_API_KEY+USE_VEO=true están
+// puestos; si no, esta parte se omite y no se gasta nada ahí). Total real con
+// solo Seedance: ~$0.15-0.20, muy por debajo del balance de fal.ai. ─────────
+app.get("/test-video-compare", async (req, res) => {
+  const prompt = req.query.prompt ||
+    "Extreme close-up of a golden DNA double helix rotating slowly, glowing particles, camera pushes in, cinematic lighting, dark editorial aesthetic with warm gold accent, 9:16 vertical, photorealistic, in motion";
+  const results = { ok: true, prompt, engines: {} };
+
+  if (!falVideo.isConfigured()) {
+    return res.status(400).json({ ok: false, error: "FAL_KEY no configurada — sin ella no se puede generar el frame ni Seedance. No se gastó nada." });
+  }
+
+  let frameUrl;
+  try {
+    frameUrl = await withTimeout(falVideo.generateImageUrl(prompt), 60000, "fal flux timeout");
+    results.frame = frameUrl;
+  } catch (e) {
+    return res.status(503).json({ ok: false, paso: "frame (fal FLUX)", error: friendlyError(e) });
+  }
+
+  try {
+    const videoUrl = await withTimeout(falVideo.animateProductUrlSeedance(frameUrl, prompt, 4), 120000, "Seedance timeout");
+    const out = path.join("outputs", "compare-seedance.mp4");
+    await downloadFile(videoUrl, out);
+    results.engines.seedance = { ok: true, costoReal: "~$0.10-0.15 (frame+video)", video: "/download/compare-seedance.mp4" };
+  } catch (e) {
+    results.engines.seedance = { ok: false, error: friendlyError(e) };
+  }
+
+  if (veoVideo.isConfigured()) {
+    try {
+      const buffer = await withTimeout(veoVideo.animateProductUrl(frameUrl, prompt, 4), 180000, "Veo timeout");
+      const out = path.join("outputs", "compare-veo.mp4");
+      fs.writeFileSync(out, buffer);
+      results.engines.veo = { ok: true, costoReal: "~$0.20-0.24 (frame+video, cuenta de Google Cloud separada)", video: "/download/compare-veo.mp4" };
+    } catch (e) {
+      results.engines.veo = { ok: false, error: friendlyError(e) };
+    }
+  } else {
+    results.engines.veo = { ok: false, error: "GEMINI_API_KEY + USE_VEO=true no configurados en Railway — no se intentó, no se gastó nada." };
+  }
+
+  res.json(results);
 });
 
 app.listen(PORT, () => console.log(`Reel Generator → http://localhost:${PORT}`));
